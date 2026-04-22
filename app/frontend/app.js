@@ -1,224 +1,213 @@
-// URL base del tuo backend Flask
 const API_BASE_URL = 'http://127.0.0.1:5000';
-
-// Elementi del DOM
-const resultsContainer = document.getElementById('results-container');
-const alertContainer = document.getElementById('alert-container');
-
-// Memoria globale per gli articoli aperti nel modal
 let currentArticles = [];
 
-// Funzione Helper per mostrare messaggi
+document.getElementById('today-date').textContent =
+    new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+// ── ALERTS ──
 function showAlert(message, type = 'success') {
-    alertContainer.innerHTML = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    `;
-    setTimeout(() => { alertContainer.innerHTML = ''; }, 5000);
+    const c = document.getElementById('alert-container');
+    c.innerHTML = `
+        <div class="alert alert-${type}">
+            <span>${message}</span>
+            <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+        </div>`;
+    setTimeout(() => { c.innerHTML = ''; }, 5000);
 }
 
-// Caricamento degli ultimi articoli all'avvio della pagina
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/latest`);
-        const data = await response.json();
+// ── EMPTY STATE ──
+function showEmptyState(msg) {
+    document.getElementById('results-container').innerHTML =
+        `<div class="empty-state"><span class="empty-state-icon">📭</span>${msg}</div>`;
+    document.getElementById('results-count').textContent = '';
+}
 
-        if (response.ok && data.results.length > 0) {
+// ── LOAD LATEST ──
+async function loadLatest() {
+    try {
+        const res  = await fetch(`${API_BASE_URL}/latest`);
+        const data = await res.json();
+        if (res.ok && data.results.length > 0) {
             displayResults(data.results);
         } else {
-            resultsContainer.innerHTML = '<div class="col-12 text-muted"><em>Nessun articolo nel database. Inizia caricandone uno!</em></div>';
+            showEmptyState('Nessun articolo nel database. Inizia caricandone uno!');
         }
-    } catch (error) {
-        console.error(error);
+    } catch {
         showAlert('Impossibile contattare il server. Flask è acceso?', 'danger');
     }
-});
-
-// Funzione che viene chiamata cliccando su una keyword
-window.triggerSearch = function(keyword) {
-    document.getElementById('searchInput').value = keyword;
-    document.getElementById('btn-search').click();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// 1. RICERCA ARTICOLI
+document.addEventListener('DOMContentLoaded', loadLatest);
+
+// ── HOME ──
+async function goHome() {
+    document.getElementById('searchInput').value = '';
+    showEmptyState('Caricamento...');
+    await loadLatest();
+    showAlert('Home — ultimi articoli', 'info');
+}
+document.getElementById('btn-clear').addEventListener('click', goHome);
+document.getElementById('logo-home').addEventListener('click', e => { e.preventDefault(); goHome(); });
+
+// ── SEARCH ──
+window.triggerSearch = function(kw) {
+    document.getElementById('searchInput').value = kw;
+    document.getElementById('form-search').dispatchEvent(new Event('submit'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 document.getElementById('form-search').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const query = document.getElementById('searchInput').value;
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) return;
     const btn = document.getElementById('btn-search');
-
-    btn.innerHTML = 'Ricerca...';
-    btn.disabled = true;
-
+    btn.textContent = '…'; btn.disabled = true;
     try {
-        const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-
-        if (response.ok) {
+        const res  = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (res.ok) {
             displayResults(data.results);
-            if (data.results.length === 0) {
-                showAlert(`Nessun articolo trovato per la keyword: ${query}`, 'warning');
-            } else {
-                showAlert(`Trovati ${data.results.length} risultati per "${query}"`, 'success');
-            }
-        } else {
-            showAlert(data.error || 'Errore durante la ricerca', 'danger');
-        }
-    } catch (error) {
-        showAlert('Impossibile contattare il server.', 'danger');
-    } finally {
-        btn.innerHTML = 'Cerca';
-        btn.disabled = false;
-    }
+            if (!data.results.length) showAlert(`Nessun risultato per "${q}"`, 'warning');
+            else showAlert(`${data.results.length} risultati per "${q}"`, 'success');
+        } else showAlert(data.error || 'Errore ricerca', 'danger');
+    } catch { showAlert('Server non raggiungibile.', 'danger'); }
+    finally { btn.textContent = 'Cerca'; btn.disabled = false; }
 });
 
-// 2. UPLOAD AUTOMATICO (SCRAPING)
+// ── UPLOAD AUTOMATICO ──
 document.getElementById('form-upload-auto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const url = document.getElementById('urlInput').value;
     const btn = document.getElementById('btn-auto');
-    btn.innerHTML = 'Estrazione in corso...';
-    btn.disabled = true;
-
+    btn.textContent = 'Estrazione…'; btn.disabled = true;
     try {
-        const response = await fetch(`${API_BASE_URL}/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url })
+        const res = await fetch(`${API_BASE_URL}/upload`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
         });
-        const data = await response.json();
-
-        if (response.ok) {
-            showAlert(`Successo! ${data.message} (${data.data.title})`);
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(`Salvato: ${data.data.title}`);
             document.getElementById('urlInput').value = '';
-            // Ricarica la lista cercando la prima keyword
-            triggerSearch(data.data.keywords[0] || '');
-        } else {
-            showAlert(data.error || 'Errore durante l\'estrazione', 'danger');
-        }
-    } catch (error) {
-        showAlert('Impossibile contattare il server.', 'danger');
-    } finally {
-        btn.innerHTML = 'Estrai e Salva';
-        btn.disabled = false;
-    }
+            triggerSearch(data.data.title || '');
+        } else showAlert(data.error || 'Errore estrazione', 'danger');
+    } catch { showAlert('Server non raggiungibile.', 'danger'); }
+    finally { btn.textContent = 'Estrai e Salva'; btn.disabled = false; }
 });
 
-// 3. UPLOAD MANUALE
+// ── UPLOAD MANUALE ──
 document.getElementById('form-upload-manual').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-manual');
-    const articleData = {
-        title: document.getElementById('manualTitle').value,
-        date: document.getElementById('manualDate').value,
-        author: document.getElementById('manualAuthor').value,
-        content: document.getElementById('manualContent').value
+    const payload = {
+        title:   document.getElementById('manualTitle').value,
+        date:    document.getElementById('manualDate').value,
+        author:  document.getElementById('manualAuthor').value,
+        content: document.getElementById('manualContent').value,
     };
-    btn.innerHTML = 'Salvataggio...';
-    btn.disabled = true;
-
+    btn.textContent = 'Salvataggio…'; btn.disabled = true;
     try {
-        const response = await fetch(`${API_BASE_URL}/upload_manual`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(articleData)
+        const res = await fetch(`${API_BASE_URL}/upload_manual`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
-        const data = await response.json();
-
-        if (response.ok) {
-            showAlert(`Successo! ${data.message}`);
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message);
             document.getElementById('form-upload-manual').reset();
-            triggerSearch(articleData.title.split(' ')[0]);
-        } else {
-            showAlert(data.error || 'Errore durante il salvataggio', 'danger');
-        }
-    } catch (error) {
-        showAlert('Impossibile contattare il server.', 'danger');
-    } finally {
-        btn.innerHTML = 'Salva Manualmente';
-        btn.disabled = false;
-    }
+            triggerSearch(payload.title);
+        } else showAlert(data.error || 'Errore salvataggio', 'danger');
+    } catch { showAlert('Server non raggiungibile.', 'danger'); }
+    finally { btn.textContent = 'Salva Manualmente'; btn.disabled = false; }
 });
 
-// Funzione per mostrare gli articoli (Card Cliccabile)
+// ── DISPLAY RESULTS ──
+// ── DISPLAY RESULTS ──
 function displayResults(articles) {
+    // 👇 NUOVO BLOCCO: Ordina gli articoli per data (dal più recente al più vecchio)
+    articles.sort((a, b) => {
+        // Se manca la data, assegniamo una data molto vecchia (1 Jan 1970) per metterli in fondo
+        const dateA = a.date ? new Date(a.date) : new Date(0);
+        const dateB = b.date ? new Date(b.date) : new Date(0);
+        return dateB - dateA; // Ordine decrescente
+    });
+
     currentArticles = articles;
-    resultsContainer.innerHTML = '';
+    const container = document.getElementById('results-container');
+    const countEl   = document.getElementById('results-count');
+    countEl.textContent = articles.length
+        ? `${articles.length} articol${articles.length === 1 ? 'o' : 'i'}` : '';
+
+    if (!articles.length) { showEmptyState('Nessun risultato trovato.'); return; }
+
+    container.innerHTML = '<div class="results-grid" id="results-grid"></div>';
+    const grid = document.getElementById('results-grid');
 
     articles.forEach((article, index) => {
-        // Aggiungiamo event.stopPropagation() per non aprire il modal se clicchiamo sul badge
-        const keywordsHtml = article.keywords.map(kw =>
-            `<span class="badge bg-info text-dark keyword-badge" style="cursor: pointer; position: relative; z-index: 2;" onclick="event.stopPropagation(); triggerSearch('${kw}')">${kw}</span>`
+        const kwHtml = (article.keywords || []).map(kw =>
+            `<span class="kw-badge" onclick="event.stopPropagation(); triggerSearch('${kw}')">${kw}</span>`
         ).join('');
 
-        // Creiamo un div invisibile per estrarre solo il testo puro dall'HTML
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = article.content || "";
-        const cleanText = tempDiv.textContent || tempDiv.innerText || "";
+        const tmpDiv = document.createElement('div');
+        tmpDiv.innerHTML = article.content || '';
+        const plain   = tmpDiv.textContent || '';
+        const excerpt = plain.length > 160 ? plain.slice(0, 160) + '…' : plain;
 
-        const shortContent = cleanText.length > 150
-            ? cleanText.substring(0, 150) + '...'
-            : cleanText;
-
-        const imageHtml = article.image_url
-            ? `<img src="${article.image_url}" class="card-img-top" alt="Copertina" style="height: 200px; object-fit: cover;">`
+        const imgHtml = article.image_url
+            ? `<img src="${article.image_url}" class="article-card-image" alt="" loading="lazy">`
             : '';
 
-        // onClick="openArticleModal(index)" sulla card intera
-        const cardHtml = `
-            <div class="col-md-12 mb-4">
-                <div class="card article-card shadow-sm h-100" style="cursor: pointer;" onclick="openArticleModal(${index})">
-                    ${imageHtml}
-                    <div class="card-body">
-                        <h5 class="card-title text-primary">${article.title}</h5>
-                        <h6 class="card-subtitle mb-2 text-muted">
-                            📅 ${article.date || 'Data sconosciuta'} | ✍️ ${article.author || 'Sconosciuto'}
-                        </h6>
-                        <p class="card-text">${shortContent}</p>
-                        
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <div>${keywordsHtml || '<span class="text-muted">Nessuna keyword estratta</span>'}</div>
-                            <span class="btn btn-outline-primary btn-sm text-nowrap ms-2">
-                                Leggi tutto 📖
-                            </span>
-                        </div>
-                    </div>
+        const card = document.createElement('div');
+        card.className = 'article-card';
+        card.innerHTML = `
+            <div class="article-card-body">
+                <p class="article-card-meta">📅 ${article.date || '—'} &nbsp;·&nbsp; ✍️ ${article.author || 'Sconosciuto'}</p>
+                <h3 class="article-card-title">${article.title}</h3>
+                <p class="article-card-excerpt">${excerpt}</p>
+                <div class="article-card-footer">
+                    ${kwHtml || '<span style="font-size:.75rem;color:var(--muted)">Nessuna keyword</span>'}
+                    <span class="read-more">Leggi</span>
                 </div>
             </div>
+            ${imgHtml}
         `;
-        resultsContainer.innerHTML += cardHtml;
+        card.addEventListener('click', () => openModal(index));
+        grid.appendChild(card);
     });
 }
+// ── MODAL OPEN ──
+function openModal(index) {
+    const a = currentArticles[index];
+    document.getElementById('articleModalLabel').textContent = a.title;
+    document.getElementById('articleModalMeta').textContent  =
+        `📅 ${a.date || 'Data sconosciuta'} · ✍️ ${a.author || 'Sconosciuto'} · 🏷 ${a.upload_method || '—'}`;
+    document.getElementById('articleModalContent').innerHTML = a.content || 'Nessun contenuto disponibile.';
 
-// Funzione per aprire il Modal con l'articolo completo
-window.openArticleModal = function(index) {
-    const article = currentArticles[index];
+    const img = document.getElementById('articleModalImage');
+    if (a.image_url) { img.src = a.image_url; img.style.display = 'block'; }
+    else img.style.display = 'none';
 
-    document.getElementById('articleModalLabel').innerText = article.title;
-    document.getElementById('articleModalMeta').innerText = `📅 ${article.date || 'Sconosciuta'} | ✍️ ${article.author || 'Sconosciuto'} | 🏷️ Metodo: ${article.upload_method}`;
+    const srcDiv = document.getElementById('articleModalSourceDiv');
+    if (a.source_url) {
+        document.getElementById('articleModalLink').href = a.source_url;
+        srcDiv.style.display = 'block';
+    } else srcDiv.style.display = 'none';
 
-    // Usiamo innerHTML per dire al browser di interpretare i tag!
-    document.getElementById('articleModalContent').innerHTML = article.content || "Nessun contenuto disponibile.";
+    document.getElementById('articleModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
 
-    const modalImage = document.getElementById('articleModalImage');
-    if (article.image_url) {
-        modalImage.src = article.image_url;
-        modalImage.style.display = 'block';
-    } else {
-        modalImage.style.display = 'none';
-    }
-
-    const sourceDiv = document.getElementById('articleModalSourceDiv');
-    const sourceLink = document.getElementById('articleModalLink');
-    if (article.source_url) {
-        sourceLink.href = article.source_url;
-        sourceDiv.style.display = 'block';
-    } else {
-        sourceDiv.style.display = 'none';
-    }
-
-    const modal = new bootstrap.Modal(document.getElementById('articleModal'));
-    modal.show();
+    // 👇 NUOVA RIGA: Resetta lo scorrimento all'inizio dell'articolo
+    document.querySelector('.modal-box').scrollTop = 0;
 }
+
+// ── MODAL CLOSE ──
+function closeModal() {
+    document.getElementById('articleModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+document.getElementById('modal-footer-close').addEventListener('click', closeModal);
+document.getElementById('articleModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('articleModal')) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
