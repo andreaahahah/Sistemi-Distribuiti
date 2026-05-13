@@ -442,7 +442,6 @@ textarea.field-input { resize: vertical; min-height: 70px; }
 }
 .btn-modal-close:hover { background: var(--ink); color: var(--paper); }
 
-/* ── RESPONSIVE ── */
 @media (max-width: 768px) {
     .main-grid          { grid-template-columns: 1fr; }
     .sidebar            { border-right: none; border-bottom: 1px solid var(--border); }

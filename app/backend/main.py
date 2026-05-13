@@ -36,7 +36,7 @@ def upload_article():
         "content": testo["html_content"],
         "date": testo["date"],
         "image_url": testo.get("image_url"),
-        "author": "Sconosciuto (Scraping)",
+        "author": testo.get("author") or "Sconosciuto",
         "keywords": keywords,
         "source_url": url,
         "upload_method": "auto"
