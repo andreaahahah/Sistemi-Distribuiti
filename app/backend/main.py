@@ -8,6 +8,7 @@ from exceptions import AppError, ValidationError, NoContentError, ArticleNotFoun
 from scraper import extract_article_data
 from nlp import extract_keywords
 from db import save_article, get_article_by_id, search_articles_by_keyword, get_latest_articles
+from nlp_dispatcher import dispatch_nlp_task
 
 config = Config()
 config.setup_logging()
@@ -30,7 +31,6 @@ def serve_css():
 @app.route("/script.js")
 def serve_js():
     return send_from_directory(FRONTEND_DIR, "script.js", mimetype="application/javascript")
-CORS(app)
 
 
 @app.errorhandler(AppError)
@@ -74,23 +74,28 @@ def upload_article():
     if not testo["html_content"]:
         raise NoContentError("Contenuto articolo non trovato nella pagina")
 
-    keywords = extract_keywords(testo["plain_text"])
-
+    # per ora salviamo l'articolo sneza keyword
     doc_data = {
         "title": testo["title"],
         "content": testo["html_content"],
         "date": testo["date"],
         "image_url": testo.get("image_url"),
         "author": testo.get("author") or "Sconosciuto",
-        "keywords": keywords,
+        "keywords": [],          
+        "nlp_status": "PENDING",
         "source_url": url,
-        "upload_method": "auto"
+        "upload_method": "auto",
     }
 
     saved_doc, is_new = save_article(doc_data)
     status = 201 if is_new else 200
     msg = "Articolo salvato con successo" if is_new else "Articolo già presente nel sistema"
     logger.info(f"{msg}: {saved_doc['id']}")
+
+    #calcolo le keyword
+    if is_new:
+        dispatch_nlp_task(saved_doc["id"], testo["plain_text"])
+
     return jsonify({"message": msg, "data": saved_doc}), status
 
 

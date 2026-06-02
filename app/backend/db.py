@@ -137,3 +137,38 @@ def get_latest_articles(limit: int = 5) -> list:
             logger.warning("Database locale non leggibile")
 
     return results
+
+
+def update_article_keywords(article_id: str, keywords: list) -> bool:
+    if USE_FIRESTORE:
+        doc_ref = db_client.collection("articles").document(article_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            logger.warning(f"update_article_keywords: articolo non trovato su Firestore: {article_id}")
+            return False
+        doc_ref.update({
+            "keywords": keywords,
+            "nlp_status": "DONE",
+        })
+        logger.info(f"Keyword aggiornate su Firestore per {article_id}")
+        return True
+
+    with _lock:
+        try:
+            with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
+                db = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            logger.warning("update_article_keywords: database locale non leggibile")
+            return False
+
+        for article in db:
+            if article.get("id") == article_id:
+                article["keywords"] = keywords
+                article["nlp_status"] = "DONE"
+                with open(LOCAL_DB_FILE, "w", encoding="utf-8") as f:
+                    json.dump(db, f, indent=4, ensure_ascii=False)
+                logger.info(f"Keyword aggiornate localmente per {article_id}")
+                return True
+
+    logger.warning(f"update_article_keywords: articolo non trovato nel DB locale: {article_id}")
+    return False
