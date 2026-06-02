@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ article.title if article else "Articolo" }} - WikiNews</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        body { background: var(--paper); }
+        .article-page { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        .article-page-header { text-align: center; margin-bottom: 40px; }
+        .article-page-title { font-family: "Playfair Display", serif; font-size: 2.5rem; font-weight: 900; color: var(--text); margin-bottom: 16px; line-height: 1.2; }
+        .article-page-meta { color: var(--muted); font-size: 0.95rem; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .article-page-image { width: 100%; max-height: 500px; object-fit: cover; border-radius: 12px; margin-bottom: 32px; }
+        .article-page-content { font-size: 1.1rem; line-height: 1.8; color: var(--text); }
+        .article-page-content p { margin-bottom: 1.5em; }
+        .article-page-content img { max-width: 100%; border-radius: 8px; margin: 20px 0; }
+        .article-page-content a { color: var(--accent); }
+        .article-page-keywords { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
+        .article-page-keywords h3 { font-size: 1rem; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .kw-badge { cursor: pointer; }
+        .article-page-source { margin-top: 40px; padding: 20px; background: var(--card-bg); border-radius: 8px; }
+        .article-page-source a { color: var(--accent); font-weight: 500; }
+        .article-page-back { display: inline-block; margin-bottom: 20px; color: var(--accent); text-decoration: none; font-weight: 500; }
+        .article-page-back:hover { text-decoration: underline; }
+        .error-page { text-align: center; padding: 80px 20px; }
+        .error-page h1 { font-size: 2rem; margin-bottom: 16px; }
+        .error-page a { color: var(--accent); }
+        .masthead-top { justify-content: center; }
+        .masthead-date, .btn-home { display: none; }
+    </style>
+</head>
+<body>
+    <header class="masthead">
+        <div class="masthead-top">
+            <span class="masthead-date" id="today-date"></span>
+            <a href="/" class="masthead-logo">Wiki<span>News</span> ☁</a>
+        </div>
+        <p class="masthead-tagline">Cloud Explorer · Archivio Wikimedia · NLP</p>
+    </header>
+
+    <div class="article-page">
+        {% if error %}
+            <div class="error-page">
+                <h1>{{ error }}</h1>
+                <p><a href="/">← Torna alla home</a></p>
+            </div>
+        {% elif article %}
+            <a href="/" class="article-page-back">← Torna alla home</a>
+            <article>
+                <header class="article-page-header">
+                    <h1 class="article-page-title">{{ article.title }}</h1>
+                    <div class="article-page-meta">
+                        <span>📅 {{ article.date or "Data sconosciuta" }}</span>
+                        <span>✍️ {{ article.author or "Sconosciuto" }}</span>
+                        <span>📥 {{ article.upload_method or "—" }}</span>
+                    </div>
+                </header>
+
+                {% if article.image_url %}
+                <img src="{{ article.image_url }}" class="article-page-image" alt="{{ article.title }}">
+                {% endif %}
+
+                <div class="article-page-content">
+                    {{ article.content|safe }}
+                </div>
+
+                {% if article.keywords and article.keywords|length > 0 %}
+                <div class="article-page-keywords">
+                    <h3>Keywords</h3>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        {% for kw in article.keywords %}
+                        <a href="/search?q={{ kw }}" class="kw-badge">{{ kw }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if article.source_url %}
+                <div class="article-page-source">
+                    📖 Fonte: <a href="{{ article.source_url }}" target="_blank" rel="noopener">{{ article.source_url }}</a>
+                </div>
+                {% endif %}
+            </article>
+        {% endif %}
+    </div>
+
+    <script>
+        document.getElementById("today-date").textContent = new Date().toLocaleDateString("it-IT", {
+            weekday: "long", day: "numeric", month: "long", year: "numeric"
+        });
+    </script>
+</body>
+</html>

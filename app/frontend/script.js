@@ -16,20 +16,24 @@ function showAlert(message, type = 'success') {
 
 function showEmptyState(msg) {
     document.getElementById('results-container').innerHTML =
-        `<div class="empty-state"><span class="empty-state-icon">📭</span>${msg}</div>`;
+        `<div class="empty-state"><span class="empty-state-icon"></span>${msg}</div>`;
     document.getElementById('results-count').textContent = '';
 }
 
 async function loadLatest() {
+    console.log("loadLatest chiamata");
     try {
         const res  = await fetch(`${API_BASE_URL}/latest`);
+        console.log("Risposta ricevuta:", res);
         const data = await res.json();
+        console.log("Data:", data);
         if (res.ok && data.results.length > 0) {
             displayResults(data.results);
         } else {
             showEmptyState('Nessun articolo nel database. Inizia caricandone uno!');
         }
-    } catch {
+    } catch (err) {
+        console.error("Errore loadLatest:", err);
         showAlert('Impossibile contattare il server. Flask è acceso?', 'danger');
     }
 }
@@ -164,15 +168,15 @@ function displayResults(articles) {
         const card = document.createElement('div');
         card.className = 'article-card';
 
-        const body = document.createElement('div');
+const body = document.createElement('div');
         body.className = 'article-card-body';
         body.innerHTML = `
-            <p class="article-card-meta">📅 ${article.date || '—'} &nbsp;·&nbsp; ✍️ ${article.author || 'Sconosciuto'}</p>
+            <p class="article-card-meta">${article.date || '—'} &nbsp;·&nbsp; ${article.author || 'Sconosciuto'}</p>
             <h3 class="article-card-title">${article.title}</h3>
             <p class="article-card-excerpt">${excerpt}</p>
         `;
 
-        const footer = document.createElement('div');
+const footer = document.createElement('div');
         footer.className = 'article-card-footer';
 
         if (article.keywords && article.keywords.length > 0) {
@@ -188,27 +192,51 @@ function displayResults(articles) {
 
                 footer.appendChild(badge);
             });
-        } else {
+} else {
             footer.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">Nessuna keyword</span>';
         }
-
-        const readMore = document.createElement('span');
-        readMore.className = 'read-more';
-        readMore.textContent = 'Leggi';
-        footer.appendChild(readMore);
 
         body.appendChild(footer);
         card.appendChild(body);
 
         if (article.image_url) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'article-card-image-wrap';
+
             const img = document.createElement('img');
             img.src = article.image_url;
             img.className = 'article-card-image';
             img.loading = 'lazy';
-            card.appendChild(img);
+            imgWrap.appendChild(img);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'card-actions';
+
+            const readMore = document.createElement('span');
+            readMore.className = 'read-more';
+            readMore.textContent = 'Anteprima';
+            readMore.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openModal(index);
+            });
+
+            const openPage = document.createElement('span');
+            openPage.className = 'read-more';
+            openPage.textContent = 'Leggi';
+            openPage.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (article.id) window.location.href = `${API_BASE_URL}/article/${article.id}`;
+            });
+
+            actionsDiv.appendChild(readMore);
+            actionsDiv.appendChild(openPage);
+            imgWrap.appendChild(actionsDiv);
+            card.appendChild(imgWrap);
         }
 
-        card.addEventListener('click', () => openModal(index));
+        card.addEventListener('click', function(e) {
+            if (!e.target.closest('.read-more')) openModal(index);
+        });
 
         grid.appendChild(card);
     });
@@ -216,9 +244,9 @@ function displayResults(articles) {
 
 function openModal(index) {
     const a = currentArticles[index];
+    if (!a) return;
+    
     document.getElementById('articleModalLabel').textContent = a.title;
-    document.getElementById('articleModalMeta').textContent  =
-        `📅 ${a.date || 'Data sconosciuta'} · ✍️ ${a.author || 'Sconosciuto'} · 🏷 ${a.upload_method || '—'}`;
     document.getElementById('articleModalContent').innerHTML = a.content || 'Nessun contenuto disponibile.';
 
     const img = document.getElementById('articleModalImage');
@@ -231,9 +259,16 @@ function openModal(index) {
         srcDiv.style.display = 'block';
     } else srcDiv.style.display = 'none';
 
+    const openPageBtn = document.getElementById('modal-open-page');
+    if (a.id) {
+        openPageBtn.style.display = 'inline-block';
+        openPageBtn.onclick = () => { window.location.href = `${API_BASE_URL}/article/${a.id}`; };
+    } else {
+        openPageBtn.style.display = 'none';
+    }
+
     document.getElementById('articleModal').classList.add('open');
     document.body.style.overflow = 'hidden';
-
     document.querySelector('.modal-box').scrollTop = 0;
 }
 

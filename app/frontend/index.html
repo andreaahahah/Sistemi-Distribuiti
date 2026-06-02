@@ -13,8 +13,8 @@
 <header class="masthead">
     <div class="masthead-top">
         <span class="masthead-date" id="today-date"></span>
-        <a href="#" class="masthead-logo" id="logo-home">Wiki<span>News</span> ☁</a>
-        <button class="btn-home" id="btn-clear">← Home</button>
+        <a href="#" class="masthead-logo" id="logo-home">Wiki<span>News</span></a>
+        <div class="masthead-logo-btn-home"><button class="btn-home" id="btn-clear">⌂ Home</button></div>
     </div>
     <p class="masthead-tagline">Cloud Explorer · Archivio Wikimedia · NLP</p>
 </header>
@@ -23,7 +23,7 @@
     <form id="form-search" style="display: flex; width: 100%; gap: 10px;">
         <input class="search-input" type="text" id="searchInput"
                placeholder="Cerca una keyword estratta dal NLP (es. wikipedia, sicilia, cultura...)">
-        <button class="btn-search" type="submit" id="btn-search">Cerca</button>
+        <button class="btn-search" type="submit" id="btn-search">CERCA</button>
     </form>
 </div>
 
@@ -62,7 +62,7 @@
         </div>
         <div id="results-container">
             <div class="empty-state">
-                <span class="empty-state-icon">🔍</span>
+                <span class="empty-state-icon"></span>
                 Usa la barra di ricerca per interrogare il database.
             </div>
         </div>
@@ -74,8 +74,13 @@
     <div class="modal-box">
         <div class="modal-header">
             <h2 class="modal-title" id="articleModalLabel"></h2>
-            <p class="modal-meta" id="articleModalMeta"></p>
-            <button class="modal-close" id="modal-close-btn" aria-label="Chiudi">✕</button>
+
+             <div style="display: flex;justify-content: center;align-items: end;gap: 12px;flex-direction: column;">
+                            <button class="modal-close" id="modal-close-btn" aria-label="Chiudi">✕</button>
+
+            <button class="btn-open-page-header" id="modal-open-page">Apri Pagina</button>
+
+             </div>
         </div>
         <div class="modal-body">
             <img id="articleModalImage" src="" class="modal-image" alt="" style="display:none;">

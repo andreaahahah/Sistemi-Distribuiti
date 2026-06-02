@@ -1,13 +1,16 @@
+import logging
+from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+from config import Config
+from exceptions import ScraperError, NoContentError
+
+logger = logging.getLogger(__name__)
+config = Config()
 
 
-def parse_italian_date(date_str):
-    """
-    Funzione di supporto per parsare date in formato testuale italiano
-    nel caso in cui il tag <time> non sia disponibile.
-    """
+def parse_italian_date(date_str: str) -> Optional[str]:
     mesi = {
         "Gennaio": "01", "Febbraio": "02", "Marzo": "03", "Aprile": "04",
         "Maggio": "05", "Giugno": "06", "Luglio": "07", "Agosto": "08",
@@ -19,24 +22,29 @@ def parse_italian_date(date_str):
     return None
 
 
-def extract_article_data(url):
-    """
-    Estrae titolo, autore, data, immagine e testo pulito da un articolo di wikimedia.it.
-    Progettato per essere eseguito in un ambiente stateless (es. Cloud Run / Cloud Functions).
-    """
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"Errore durante il recupero dell'URL {url}: {e}")
-        return None
+def extract_article_data(url: str) -> dict:
+    timeout = config.get("scraper", "timeout", default=10)
+    max_retries = config.get("scraper", "max_retries", default=3)
+    retry_delay = config.get("scraper", "retry_delay", default=2)
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+            break
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Retry {attempt + 1}/{max_retries} for {url}: {e}")
+            if attempt == max_retries - 1:
+                raise ScraperError(f"Impossibile recuperare l'URL dopo {max_retries} tentativi: {e}")
+            import time
+            time.sleep(retry_delay)
+
+    soup = BeautifulSoup(response.text, "html.parser")
 
     h1 = soup.find("h1")
     title = h1.get_text(strip=True) if h1 else soup.find("title").get_text(strip=True)
 
-    author = None
+    author: Optional[str] = None
     author_span = soup.find("span", class_="fn", attrs={"itemprop": "name"})
     if author_span:
         author = author_span.get_text(strip=True)
@@ -48,7 +56,7 @@ def extract_article_data(url):
             meta_author = soup.find("meta", attrs={"name": "author"})
             author = meta_author.get("content", "").strip() if meta_author else None
 
-    date_text = None
+    date_text: Optional[str] = None
     time_el = soup.find("time", class_="entry-date updated")
     if time_el and time_el.has_attr("datetime"):
         date_text = time_el["datetime"][:10]
@@ -74,6 +82,7 @@ def extract_article_data(url):
     )
 
     if not content_div:
+        logger.info(f"Nessun content_div trovato per {url}")
         return {
             "title": title,
             "author": author,
@@ -82,7 +91,6 @@ def extract_article_data(url):
             "html_content": "",
             "plain_text": ""
         }
-
 
     for el in content_div.find_all("ul", class_="breadcrumbs"): el.decompose()
     for el in content_div.find_all("h2", class_="entry-title"): el.decompose()
@@ -136,6 +144,8 @@ def extract_article_data(url):
     html_content = content_div.decode_contents().strip()
     plain_text = content_div.get_text(separator="\n\n", strip=True)
 
+    logger.info(f"Articolo estratto: {title}")
+
     return {
         "title": title,
         "author": author,
@@ -144,4 +154,3 @@ def extract_article_data(url):
         "html_content": html_content,
         "plain_text": plain_text,
     }
-

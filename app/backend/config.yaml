@@ -1,0 +1,22 @@
+app:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true
+
+scraper:
+  timeout: 10
+  max_retries: 3
+  retry_delay: 2
+
+nlp:
+  max_keywords: 10
+  language: "it"
+  use_google: false
+
+db:
+  use_firestore: false
+  local_db_file: "local_db.json"
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

@@ -1,33 +1,78 @@
-from flask import Flask, request, jsonify
+import logging
+import os
+from flask import Flask, request, jsonify, render_template, abort, send_from_directory
 from flask_cors import CORS
+
+from config import Config
+from exceptions import AppError, ValidationError, NoContentError, ArticleNotFoundError, ScraperError
 from scraper import extract_article_data
 from nlp import extract_keywords
-from db import save_article, search_articles_by_keyword, get_latest_articles
+from db import save_article, get_article_by_id, search_articles_by_keyword, get_latest_articles
 
-app = Flask(__name__)
+config = Config()
+config.setup_logging()
+logger = logging.getLogger(__name__)
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+TEMPLATES_DIR = os.path.join(FRONTEND_DIR, "templates")
+STATIC_DIR = os.path.join(FRONTEND_DIR, "static") if os.path.exists(os.path.join(FRONTEND_DIR, "static")) else FRONTEND_DIR
+
+app = Flask(__name__, template_folder=TEMPLATES_DIR)
 CORS(app)
+
+
+@app.route("/style.css")
+def serve_css():
+    return send_from_directory(FRONTEND_DIR, "style.css", mimetype="text/css")
+
+
+@app.route("/script.js")
+def serve_js():
+    return send_from_directory(FRONTEND_DIR, "script.js", mimetype="application/javascript")
+CORS(app)
+
+
+@app.errorhandler(AppError)
+def handle_app_error(error):
+    logger.error(f"AppError: {error.message}")
+    response = jsonify(error.to_dict())
+    response.status_code = error.status_code
+    return response
 
 
 @app.route("/")
 def home():
-    return jsonify({"status": "API Wikimedia Italia - Online!"})
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route("/article/<article_id>")
+def article_page(article_id: str):
+    article = get_article_by_id(article_id)
+    if not article:
+        return render_template("article.html", error="Articolo non trovato"), 404
+    return render_template("article.html", article=article)
 
 
 @app.route("/upload", methods=["POST"])
 def upload_article():
     data = request.get_json()
-    if not data or 'url' not in data:
-        return jsonify({"error": "URL mancante"}), 400
+    if not data or "url" not in data:
+        raise ValidationError("URL mancante")
 
     url = data["url"]
+    logger.info(f"Upload richiesto per URL: {url}")
 
     try:
         testo = extract_article_data(url)
+    except ScraperError:
+        raise
     except Exception as e:
-        return jsonify({"error": f"Scraper fallito: {str(e)}"}), 500
+        logger.exception("Errore scraper")
+        raise ScraperError(f"Scraper fallito: {str(e)}")
 
     if not testo["html_content"]:
-        return jsonify({"error": "Contenuto articolo non trovato nella pagina"}), 422
+        raise NoContentError("Contenuto articolo non trovato nella pagina")
 
     keywords = extract_keywords(testo["plain_text"])
 
@@ -43,25 +88,23 @@ def upload_article():
     }
 
     saved_doc, is_new = save_article(doc_data)
-
-    if is_new:
-        return jsonify({"message": "Articolo salvato con successo", "data": saved_doc}), 201
-    else:
-        return jsonify({"message": "Articolo già presente nel sistema", "data": saved_doc}), 200
+    status = 201 if is_new else 200
+    msg = "Articolo salvato con successo" if is_new else "Articolo già presente nel sistema"
+    logger.info(f"{msg}: {saved_doc['id']}")
+    return jsonify({"message": msg, "data": saved_doc}), status
 
 
 @app.route("/upload_manual", methods=["POST"])
 def upload_article_manual():
     data = request.get_json()
-    title = data.get('title', '').strip()
-    content = data.get('content', '').strip()
+    title = data.get("title", "").strip()
+    content = data.get("content", "").strip()
 
     if not title or not content:
-        return jsonify({"error": "Dati mancanti: 'title' e 'content' sono obbligatori e non possono essere vuoti"}), 400
+        raise ValidationError("'title' e 'content' sono obbligatori e non possono essere vuoti")
 
-    raw_content = data["content"]
-    keywords = extract_keywords(raw_content)
-    html_formatted_content = "".join(f"<p>{par}</p>" for par in raw_content.split('\n') if par.strip())
+    keywords = extract_keywords(content)
+    html_formatted_content = "".join(f"<p>{par}</p>" for par in content.split("\n") if par.strip())
 
     doc_data = {
         "title": data["title"],
@@ -73,20 +116,20 @@ def upload_article_manual():
     }
 
     saved_doc, is_new = save_article(doc_data)
-
-    if is_new:
-        return jsonify({"message": "Articolo salvato con successo", "data": saved_doc}), 201
-    else:
-        return jsonify({"message": "Articolo già presente nel sistema", "data": saved_doc}), 200
+    status = 201 if is_new else 200
+    msg = "Articolo salvato con successo" if is_new else "Articolo già presente nel sistema"
+    logger.info(f"{msg}: {saved_doc['id']}")
+    return jsonify({"message": msg, "data": saved_doc}), status
 
 
 @app.route("/search", methods=["GET"])
 def search():
     query = request.args.get("q")
     if not query:
-        return jsonify({"error": "Parametro 'q' mancante per la ricerca"}), 400
+        raise ValidationError("Parametro 'q' mancante per la ricerca")
 
     results = search_articles_by_keyword(query)
+    logger.info(f"Ricerca '{query}': {len(results)} risultati")
     return jsonify({
         "query": query,
         "count": len(results),
@@ -103,5 +146,17 @@ def latest_articles():
     }), 200
 
 
+@app.route("/article/<article_id>/json", methods=["GET"])
+def article_json(article_id: str):
+    article = get_article_by_id(article_id)
+    if not article:
+        raise ArticleNotFoundError("Articolo non trovato")
+    return jsonify(article), 200
+
+
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    host = config.get("app", "host", default="0.0.0.0")
+    port = config.get("app", "port", default=5000)
+    debug = config.get("app", "debug", default=True)
+    logger.info(f"Avvio server su {host}:{port}")
+    app.run(debug=debug, host=host, port=port)
