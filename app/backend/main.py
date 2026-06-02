@@ -6,8 +6,8 @@ from flask_cors import CORS
 from config import Config
 from exceptions import AppError, ValidationError, NoContentError, ArticleNotFoundError, ScraperError
 from scraper import extract_article_data
-from nlp import extract_keywords
-from db import save_article, get_article_by_id, search_articles_by_keyword, get_latest_articles
+from nlp import extract_keywords  # usata solo dal dispatcher
+from db import save_article, get_article_by_id, search_articles_by_keyword, get_latest_articles, get_user_articles
 from nlp_dispatcher import dispatch_nlp_task
 
 config = Config()
@@ -41,6 +41,20 @@ def handle_app_error(error):
     return response
 
 
+def get_current_user():
+    """Restituisce il nome utente se presente nell'header Authorization o come token via GET, altrimenti None."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header.split(" ")[1]
+    
+    token = request.args.get("token")
+    if token:
+        return token
+        
+    return None
+
+
+
 @app.route("/")
 def home():
     return send_from_directory(FRONTEND_DIR, "index.html")
@@ -48,14 +62,19 @@ def home():
 
 @app.route("/article/<article_id>")
 def article_page(article_id: str):
-    article = get_article_by_id(article_id)
+    current_user = get_current_user()
+    article = get_article_by_id(article_id, current_user)
     if not article:
-        return render_template("article.html", error="Articolo non trovato"), 404
+        return render_template("article.html", error="Articolo non trovato o accesso negato"), 404
     return render_template("article.html", article=article)
 
 
 @app.route("/upload", methods=["POST"])
 def upload_article():
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"message": "Autenticazione richiesta"}), 401
+
     data = request.get_json()
     if not data or "url" not in data:
         raise ValidationError("URL mancante")
@@ -85,6 +104,8 @@ def upload_article():
         "nlp_status": "PENDING",
         "source_url": url,
         "upload_method": "auto",
+        "user_id": current_user,
+        "is_public": data.get("is_public", True),
     }
 
     saved_doc, is_new = save_article(doc_data)
@@ -101,6 +122,10 @@ def upload_article():
 
 @app.route("/upload_manual", methods=["POST"])
 def upload_article_manual():
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"message": "Autenticazione richiesta"}), 401
+
     data = request.get_json()
     title = data.get("title", "").strip()
     content = data.get("content", "").strip()
@@ -108,7 +133,6 @@ def upload_article_manual():
     if not title or not content:
         raise ValidationError("'title' e 'content' sono obbligatori e non possono essere vuoti")
 
-    keywords = extract_keywords(content)
     html_formatted_content = "".join(f"<p>{par}</p>" for par in content.split("\n") if par.strip())
 
     doc_data = {
@@ -116,14 +140,21 @@ def upload_article_manual():
         "content": html_formatted_content,
         "author": data.get("author", "Sconosciuto"),
         "date": data.get("date", "Sconosciuta"),
-        "keywords": keywords,
-        "upload_method": "manual"
+        "keywords": [],
+        "nlp_status": "PENDING",
+        "upload_method": "manual",
+        "user_id": current_user,
+        "is_public": data.get("is_public", True)
     }
 
     saved_doc, is_new = save_article(doc_data)
     status = 201 if is_new else 200
     msg = "Articolo salvato con successo" if is_new else "Articolo già presente nel sistema"
     logger.info(f"{msg}: {saved_doc['id']}")
+
+    if is_new:
+        dispatch_nlp_task(saved_doc["id"], content)
+
     return jsonify({"message": msg, "data": saved_doc}), status
 
 
@@ -133,7 +164,8 @@ def search():
     if not query:
         raise ValidationError("Parametro 'q' mancante per la ricerca")
 
-    results = search_articles_by_keyword(query)
+    current_user = get_current_user()
+    results = search_articles_by_keyword(query, current_user)
     logger.info(f"Ricerca '{query}': {len(results)} risultati")
     return jsonify({
         "query": query,
@@ -144,8 +176,24 @@ def search():
 
 @app.route("/latest", methods=["GET"])
 def latest_articles():
-    results = get_latest_articles(5)
+    current_user = get_current_user()
+    results = get_latest_articles(5, current_user)
     return jsonify({
+        "count": len(results),
+        "results": results
+    }), 200
+
+
+@app.route("/api/user/articles", methods=["GET"])
+def user_articles():
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"message": "Autenticazione richiesta"}), 401
+
+    results = get_user_articles(current_user)
+    logger.info(f"Dashboard utente '{current_user}': {len(results)} articoli")
+    return jsonify({
+        "user_id": current_user,
         "count": len(results),
         "results": results
     }), 200
@@ -153,9 +201,10 @@ def latest_articles():
 
 @app.route("/article/<article_id>/json", methods=["GET"])
 def article_json(article_id: str):
-    article = get_article_by_id(article_id)
+    current_user = get_current_user()
+    article = get_article_by_id(article_id, current_user)
     if not article:
-        raise ArticleNotFoundError("Articolo non trovato")
+        raise ArticleNotFoundError("Articolo non trovato o accesso negato")
     return jsonify(article), 200
 
 

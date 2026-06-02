@@ -16,6 +16,7 @@ LOCAL_DB_FILE = os.path.join(os.path.dirname(__file__), config.get("db", "local_
 
 if USE_FIRESTORE:
     from google.cloud import firestore
+    from google.cloud.firestore import Filter
     db_client = firestore.Client()
 else:
     if not os.path.exists(LOCAL_DB_FILE):
@@ -71,30 +72,56 @@ def save_article(article_data: dict) -> tuple:
     return article_data, True
 
 
-def get_article_by_id(article_id: str) -> Optional[dict]:
+def get_article_by_id(article_id: str, current_user_id: Optional[str] = None) -> Optional[dict]:
     if USE_FIRESTORE:
         doc = db_client.collection("articles").document(article_id).get()
         if doc.exists:
             data = doc.to_dict()
+            is_public = data.get("is_public", True)
+            owner_id = data.get("user_id")
+            if not is_public and owner_id != current_user_id:
+                return None
             data["id"] = doc.id
             return data
         return None
 
     with _lock:
-        with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
-            db = json.load(f)
+        try:
+            with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
+                db = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            db = []
+            
         for article in db:
             if article.get("id") == article_id:
+                is_public = article.get("is_public", True)
+                owner_id = article.get("user_id")
+                if not is_public and owner_id != current_user_id:
+                    return None
                 return article
     return None
 
 
-def search_articles_by_keyword(keyword: str) -> list:
+def search_articles_by_keyword(keyword: str, current_user_id: Optional[str] = None) -> list:
     keyword = keyword.lower()
     results = []
 
     if USE_FIRESTORE:
-        docs = db_client.collection("articles").where("keywords", "array_contains", keyword).stream()
+        keyword_filter = Filter("keywords", "array_contains", keyword)
+        
+        if current_user_id:
+            access_filter = Filter(
+                [Filter("is_public", "==", True), Filter("user_id", "==", current_user_id)],
+                operator=Filter.Operator.OR
+            )
+            final_filter = Filter([keyword_filter, access_filter], operator=Filter.Operator.AND)
+        else:
+            final_filter = Filter(
+                [keyword_filter, Filter("is_public", "==", True)],
+                operator=Filter.Operator.AND
+            )
+
+        docs = db_client.collection("articles").where(filter=final_filter).stream()
         for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
@@ -108,6 +135,13 @@ def search_articles_by_keyword(keyword: str) -> list:
                 db = []
 
         for article in db:
+            is_public = article.get("is_public", True)
+            owner_id = article.get("user_id")
+            
+            # Filtra per permessi
+            if not is_public and owner_id != current_user_id:
+                continue
+
             keywords_lower = [kw.lower() for kw in article.get("keywords", [])]
             title_lower = article.get("title", "").lower()
             if keyword in keywords_lower or keyword in title_lower:
@@ -117,11 +151,19 @@ def search_articles_by_keyword(keyword: str) -> list:
     return results
 
 
-def get_latest_articles(limit: int = 5) -> list:
+def get_latest_articles(limit: int = 5, current_user_id: Optional[str] = None) -> list:
     results = []
 
     if USE_FIRESTORE:
-        docs = db_client.collection("articles").order_by("inserted_at", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        if current_user_id:
+            access_filter = Filter(
+                [Filter("is_public", "==", True), Filter("user_id", "==", current_user_id)],
+                operator=Filter.Operator.OR
+            )
+        else:
+            access_filter = Filter("is_public", "==", True)
+
+        docs = db_client.collection("articles").where(filter=access_filter).order_by("inserted_at", direction=firestore.Query.DESCENDING).limit(limit).stream()
         for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
@@ -132,10 +174,53 @@ def get_latest_articles(limit: int = 5) -> list:
                 with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
                     db = json.load(f)
             db.sort(key=lambda x: x.get("inserted_at", ""), reverse=True)
-            results = db[:limit]
+            
+            # Filtra i risultati
+            for article in db:
+                is_public = article.get("is_public", True)
+                owner_id = article.get("user_id")
+                if is_public or owner_id == current_user_id:
+                    results.append(article)
+                    if len(results) >= limit:
+                        break
+
         except (json.JSONDecodeError, FileNotFoundError):
             logger.warning("Database locale non leggibile")
 
+    return results
+
+
+def get_user_articles(user_id: str, limit: int = 50) -> list:
+    results = []
+
+    if USE_FIRESTORE:
+        docs = (
+            db_client.collection("articles")
+            .where("user_id", "==", user_id)
+            .order_by("inserted_at", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+            .stream()
+        )
+        for doc in docs:
+            data = doc.to_dict()
+            data["id"] = doc.id
+            results.append(data)
+    else:
+        with _lock:
+            try:
+                with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
+                    db = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                db = []
+
+        for article in db:
+            if article.get("user_id") == user_id:
+                results.append(article)
+
+        results.sort(key=lambda x: x.get("inserted_at", ""), reverse=True)
+        results = results[:limit]
+
+    logger.info(f"Articoli utente '{user_id}': {len(results)} risultati")
     return results
 
 

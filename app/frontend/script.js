@@ -4,6 +4,93 @@ let currentArticles = [];
 document.getElementById('today-date').textContent =
     new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
+// --- AUTHENTICATION ---
+function updateLoginState() {
+    const token = localStorage.getItem('fake_token');
+    if (token) {
+        document.getElementById('btn-open-login').style.display = 'none';
+        document.getElementById('user-menu').style.display = 'flex';
+        document.getElementById('upload-sections').style.display = 'block';
+        document.getElementById('masthead-user-name').textContent = token;
+    } else {
+        document.getElementById('btn-open-login').style.display = 'inline-block';
+        document.getElementById('user-menu').style.display = 'none';
+        document.getElementById('upload-sections').style.display = 'none';
+    }
+}
+
+document.getElementById('btn-open-login').addEventListener('click', () => {
+    document.getElementById('loginModal').classList.add('open');
+});
+
+function closeLoginModal() {
+    document.getElementById('loginModal').classList.remove('open');
+}
+
+document.getElementById('login-modal-close-btn').addEventListener('click', closeLoginModal);
+document.getElementById('loginModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('loginModal')) closeLoginModal();
+});
+
+document.getElementById('form-login').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const username = document.getElementById('usernameInput').value.trim();
+    if (username) {
+        localStorage.setItem('fake_token', username);
+        document.getElementById('usernameInput').value = '';
+        updateLoginState();
+        closeLoginModal();
+        showAlert(`Benvenuto, ${username}!`, 'success');
+        goHome();
+    }
+});
+
+document.getElementById('btn-logout').addEventListener('click', () => {
+    localStorage.removeItem('fake_token');
+    updateLoginState();
+    showAlert('Logout effettuato con successo', 'info');
+    goHome();
+});
+
+// --- DASHBOARD: I TUOI ARTICOLI ---
+async function loadMyArticles() {
+    const token = localStorage.getItem('fake_token');
+    if (!token) {
+        showAlert('Devi effettuare il login per vedere i tuoi articoli.', 'warning');
+        return;
+    }
+
+    document.getElementById('searchInput').value = '';
+    showEmptyState('Caricamento dei tuoi articoli…');
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/user/articles`, { headers: getHeaders(null) });
+        const data = await res.json();
+
+        if (res.ok && data.results.length > 0) {
+            displayResults(data.results);
+            showAlert(`I tuoi articoli — ${data.count} trovati`, 'info');
+        } else if (res.ok) {
+            showEmptyState('Non hai ancora caricato nessun articolo.');
+        } else {
+            showAlert(data.message || 'Errore nel caricamento', 'danger');
+        }
+    } catch (err) {
+        console.error("Errore loadMyArticles:", err);
+        showAlert('Server non raggiungibile.', 'danger');
+    }
+}
+
+document.getElementById('btn-my-articles').addEventListener('click', loadMyArticles);
+
+function getHeaders(contentType = 'application/json') {
+    const headers = {};
+    if (contentType) headers['Content-Type'] = contentType;
+    const token = localStorage.getItem('fake_token');
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return headers;
+}
+
 function showAlert(message, type = 'success') {
     const c = document.getElementById('alert-container');
     c.innerHTML = `
@@ -23,7 +110,7 @@ function showEmptyState(msg) {
 async function loadLatest() {
     console.log("loadLatest chiamata");
     try {
-        const res  = await fetch(`${API_BASE_URL}/latest`);
+        const res  = await fetch(`${API_BASE_URL}/latest`, { headers: getHeaders(null) });
         console.log("Risposta ricevuta:", res);
         const data = await res.json();
         console.log("Data:", data);
@@ -38,7 +125,10 @@ async function loadLatest() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', loadLatest);
+document.addEventListener('DOMContentLoaded', () => {
+    updateLoginState();
+    loadLatest();
+});
 
 async function goHome() {
     document.getElementById('searchInput').value = '';
@@ -58,7 +148,7 @@ async function executeSearch(query) {
     btn.disabled = true;
 
     try {
-        const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`, { headers: getHeaders(null) });
         const data = await res.json();
         if (res.ok) {
             displayResults(data.results);
@@ -96,12 +186,13 @@ document.getElementById('form-search').addEventListener('submit', (e) => {
 document.getElementById('form-upload-auto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const url = document.getElementById('urlInput').value;
+    const isPublic = document.getElementById('autoIsPublic').checked;
     const btn = document.getElementById('btn-auto');
     btn.textContent = 'Estrazione…'; btn.disabled = true;
     try {
         const res = await fetch(`${API_BASE_URL}/upload`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ url, is_public: isPublic })
         });
         const data = await res.json();
         if (res.ok) {
@@ -121,11 +212,12 @@ document.getElementById('form-upload-manual').addEventListener('submit', async (
         date:    document.getElementById('manualDate').value,
         author:  document.getElementById('manualAuthor').value,
         content: document.getElementById('manualContent').value,
+        is_public: document.getElementById('manualIsPublic').checked,
     };
     btn.textContent = 'Salvataggio…'; btn.disabled = true;
     try {
         const res = await fetch(`${API_BASE_URL}/upload_manual`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: getHeaders(),
             body: JSON.stringify(payload)
         });
         const data = await res.json();
@@ -225,7 +317,12 @@ const footer = document.createElement('div');
             openPage.textContent = 'Leggi';
             openPage.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (article.id) window.location.href = `${API_BASE_URL}/article/${article.id}`;
+                if (article.id) {
+                    const token = localStorage.getItem('fake_token');
+                    let url = `${API_BASE_URL}/article/${article.id}`;
+                    if (token) url += `?token=${token}`;
+                    window.location.href = url;
+                }
             });
 
             actionsDiv.appendChild(readMore);
@@ -262,7 +359,12 @@ function openModal(index) {
     const openPageBtn = document.getElementById('modal-open-page');
     if (a.id) {
         openPageBtn.style.display = 'inline-block';
-        openPageBtn.onclick = () => { window.location.href = `${API_BASE_URL}/article/${a.id}`; };
+        openPageBtn.onclick = () => { 
+            const token = localStorage.getItem('fake_token');
+            let url = `${API_BASE_URL}/article/${a.id}`;
+            if (token) url += `?token=${token}`;
+            window.location.href = url;
+        };
     } else {
         openPageBtn.style.display = 'none';
     }

@@ -14,7 +14,19 @@
     <div class="masthead-top">
         <span class="masthead-date" id="today-date"></span>
         <a href="#" class="masthead-logo" id="logo-home">Wiki<span>News</span></a>
-        <div class="masthead-logo-btn-home"><button class="btn-home" id="btn-clear">⌂ Home</button></div>
+        <div class="masthead-logo-btn-home" style="display: flex; justify-content: flex-end; align-items: center;">
+            <button class="btn-home" id="btn-clear">⌂ Home</button>
+            <button class="btn-home" id="btn-open-login" style="margin-left: 0.5rem;">LOGIN</button>
+            <div id="user-menu" style="display: none; align-items: center; gap: 1rem; margin-left: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--ink); font-family: 'DM Mono', monospace; font-size: 0.8rem; font-weight: bold;">
+                    <!-- SVG User Icon -->
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    <span id="masthead-user-name" style="text-transform: uppercase; letter-spacing: 0.05em;"></span>
+                </div>
+                <button id="btn-my-articles" style="background: var(--accent2); color: #fff; border: 1px solid var(--accent2); font-family: 'DM Mono', monospace; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; padding: 0.35rem 0.7rem; cursor: pointer; border-radius: 2px; transition: all 0.2s;">I tuoi articoli</button>
+                <button id="btn-logout" style="background: transparent; color: var(--accent); border: 1px solid var(--accent); font-family: 'DM Mono', monospace; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; padding: 0.35rem 0.7rem; cursor: pointer; border-radius: 2px; transition: all 0.2s;">LOGOUT</button>
+            </div>
+        </div>
     </div>
     <p class="masthead-tagline">Cloud Explorer · Archivio Wikimedia · NLP</p>
 </header>
@@ -30,27 +42,37 @@
 <div class="main-grid">
 
     <aside class="sidebar">
-        <div>
-            <p class="sidebar-section-title">Estrazione Automatica</p>
-            <form id="form-upload-auto">
-                <label class="form-label-small">URL Articolo Wikimedia</label>
-                <input class="field-input" type="url" id="urlInput" placeholder="https://www.wikimedia.it/news/...">
-                <button class="btn-sidebar btn-sidebar-green" type="submit" id="btn-auto">Estrai e Salva</button>
-            </form>
-        </div>
-        <div>
-            <p class="sidebar-section-title">Inserimento Manuale</p>
-            <form id="form-upload-manual">
-                <label class="form-label-small">Titolo</label>
-                <input class="field-input" type="text" id="manualTitle">
-                <label class="form-label-small">Data</label>
-                <input class="field-input" type="date" id="manualDate">
-                <label class="form-label-small">Autore</label>
-                <input class="field-input" type="text" id="manualAuthor">
-                <label class="form-label-small">Contenuto</label>
-                <textarea class="field-input" id="manualContent" rows="4"></textarea>
-                <button class="btn-sidebar btn-sidebar-dark" type="submit" id="btn-manual">Salva Manualmente</button>
-            </form>
+        <div id="upload-sections" style="display: none;">
+            <div>
+                <p class="sidebar-section-title">Estrazione Automatica</p>
+                <form id="form-upload-auto">
+                    <label class="form-label-small">URL Articolo Wikimedia</label>
+                    <input class="field-input" type="url" id="urlInput" placeholder="https://www.wikimedia.it/news/...">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; cursor: pointer;">
+                        <input type="checkbox" id="autoIsPublic" checked style="accent-color: var(--accent2); width: 14px; height: 14px;">
+                        <span class="form-label-small" style="margin: 0;">Pubblico</span>
+                    </label>
+                    <button class="btn-sidebar btn-sidebar-green" type="submit" id="btn-auto">Estrai e Salva</button>
+                </form>
+            </div>
+            <div style="margin-top: 2rem;">
+                <p class="sidebar-section-title">Inserimento Manuale</p>
+                <form id="form-upload-manual">
+                    <label class="form-label-small">Titolo</label>
+                    <input class="field-input" type="text" id="manualTitle">
+                    <label class="form-label-small">Data</label>
+                    <input class="field-input" type="date" id="manualDate">
+                    <label class="form-label-small">Autore</label>
+                    <input class="field-input" type="text" id="manualAuthor">
+                    <label class="form-label-small">Contenuto</label>
+                    <textarea class="field-input" id="manualContent" rows="4"></textarea>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; cursor: pointer;">
+                        <input type="checkbox" id="manualIsPublic" checked style="accent-color: var(--accent2); width: 14px; height: 14px;">
+                        <span class="form-label-small" style="margin: 0;">Pubblico</span>
+                    </label>
+                    <button class="btn-sidebar btn-sidebar-dark" type="submit" id="btn-manual">Salva Manualmente</button>
+                </form>
+            </div>
         </div>
     </aside>
 
@@ -92,6 +114,29 @@
         </div>
         <div class="modal-footer">
             <button class="btn-modal-close" id="modal-footer-close">Chiudi</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalLabel">
+    <div class="modal-box" style="max-width: 420px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+        <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <h2 class="modal-title" id="loginModalLabel" style="font-size: 1.2rem;">Accesso</h2>
+            <button class="modal-close" id="login-modal-close-btn" aria-label="Chiudi" style="border: none;">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 2rem 1.6rem;">
+            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.6;">
+                Inserisci le tue credenziali per autenticarti.
+            </p>
+            <form id="form-login">
+                <label class="form-label-small">Email o Nome Utente</label>
+                <input class="field-input" type="text" id="usernameInput" placeholder="es. MarioRossi" required style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1rem;">
+                
+                <label class="form-label-small">Password</label>
+                <input class="field-input" type="password" id="passwordInput" placeholder="••••••••" required style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1.5rem;">
+
+                <button class="btn-sidebar btn-sidebar-dark" type="submit" id="btn-login" style="font-size: 0.85rem; padding: 0.75rem;">Accedi al Sistema</button>
+            </form>
         </div>
     </div>
 </div>
