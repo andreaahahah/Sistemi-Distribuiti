@@ -1,8 +1,9 @@
-const API_BASE_URL = 'http://127.0.0.1:5000';
+
+const API_BASE_URL = '';
 let currentArticles = [];
 
 document.getElementById('today-date').textContent =
-    new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+    new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 // --- AUTHENTICATION ---
 function updateLoginState() {
@@ -110,7 +111,7 @@ function showEmptyState(msg) {
 async function loadLatest() {
     console.log("loadLatest chiamata");
     try {
-        const res  = await fetch(`${API_BASE_URL}/latest`, { headers: getHeaders(null) });
+        const res = await fetch(`${API_BASE_URL}/latest`, { headers: getHeaders(null) });
         console.log("Risposta ricevuta:", res);
         const data = await res.json();
         console.log("Data:", data);
@@ -165,7 +166,7 @@ async function executeSearch(query) {
     }
 }
 
-window.triggerSearch = function(kw) {
+window.triggerSearch = function (kw) {
     document.getElementById('searchInput').value = kw;
     //window.scrollTo({ top: 0, behavior: 'smooth' });
     executeSearch(kw);
@@ -208,9 +209,9 @@ document.getElementById('form-upload-manual').addEventListener('submit', async (
     e.preventDefault();
     const btn = document.getElementById('btn-manual');
     const payload = {
-        title:   document.getElementById('manualTitle').value,
-        date:    document.getElementById('manualDate').value,
-        author:  document.getElementById('manualAuthor').value,
+        title: document.getElementById('manualTitle').value,
+        date: document.getElementById('manualDate').value,
+        author: document.getElementById('manualAuthor').value,
         content: document.getElementById('manualContent').value,
         is_public: document.getElementById('manualIsPublic').checked,
     };
@@ -239,7 +240,7 @@ function displayResults(articles) {
 
     currentArticles = articles;
     const container = document.getElementById('results-container');
-    const countEl   = document.getElementById('results-count');
+    const countEl = document.getElementById('results-count');
     countEl.textContent = articles.length
         ? `${articles.length} articol${articles.length === 1 ? 'o' : 'i'}` : '';
 
@@ -254,13 +255,13 @@ function displayResults(articles) {
     articles.forEach((article, index) => {
         const tmpDiv = document.createElement('div');
         tmpDiv.innerHTML = article.content || '';
-        const plain   = tmpDiv.textContent || '';
+        const plain = tmpDiv.textContent || '';
         const excerpt = plain.length > 160 ? plain.slice(0, 160) + '…' : plain;
 
         const card = document.createElement('div');
         card.className = 'article-card';
 
-const body = document.createElement('div');
+        const body = document.createElement('div');
         body.className = 'article-card-body';
         body.innerHTML = `
             <p class="article-card-meta">${article.date || '—'} &nbsp;·&nbsp; ${article.author || 'Sconosciuto'}</p>
@@ -268,7 +269,7 @@ const body = document.createElement('div');
             <p class="article-card-excerpt">${excerpt}</p>
         `;
 
-const footer = document.createElement('div');
+        const footer = document.createElement('div');
         footer.className = 'article-card-footer';
 
         if (article.keywords && article.keywords.length > 0) {
@@ -284,7 +285,7 @@ const footer = document.createElement('div');
 
                 footer.appendChild(badge);
             });
-} else {
+        } else {
             footer.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">Nessuna keyword</span>';
         }
 
@@ -331,7 +332,7 @@ const footer = document.createElement('div');
             card.appendChild(imgWrap);
         }
 
-        card.addEventListener('click', function(e) {
+        card.addEventListener('click', function (e) {
             if (!e.target.closest('.read-more')) openModal(index);
         });
 
@@ -342,7 +343,7 @@ const footer = document.createElement('div');
 function openModal(index) {
     const a = currentArticles[index];
     if (!a) return;
-    
+
     document.getElementById('articleModalLabel').textContent = a.title;
     document.getElementById('articleModalContent').innerHTML = a.content || 'Nessun contenuto disponibile.';
 
@@ -359,7 +360,7 @@ function openModal(index) {
     const openPageBtn = document.getElementById('modal-open-page');
     if (a.id) {
         openPageBtn.style.display = 'inline-block';
-        openPageBtn.onclick = () => { 
+        openPageBtn.onclick = () => {
             const token = localStorage.getItem('fake_token');
             let url = `${API_BASE_URL}/article/${a.id}`;
             if (token) url += `?token=${token}`;

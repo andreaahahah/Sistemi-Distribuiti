@@ -16,7 +16,7 @@ LOCAL_DB_FILE = os.path.join(os.path.dirname(__file__), config.get("db", "local_
 
 if USE_FIRESTORE:
     from google.cloud import firestore
-    from google.cloud.firestore import Filter
+    from google.cloud.firestore_v1.base_query import FieldFilter, Or, And
     db_client = firestore.Client()
 else:
     if not os.path.exists(LOCAL_DB_FILE):
@@ -107,19 +107,23 @@ def search_articles_by_keyword(keyword: str, current_user_id: Optional[str] = No
     results = []
 
     if USE_FIRESTORE:
-        keyword_filter = Filter("keywords", "array_contains", keyword)
+        # 1. Filtro per la keyword nell'array
+        keyword_filter = FieldFilter("keywords", "array_contains", keyword)
         
         if current_user_id:
-            access_filter = Filter(
-                [Filter("is_public", "==", True), Filter("user_id", "==", current_user_id)],
-                operator=Filter.Operator.OR
-            )
-            final_filter = Filter([keyword_filter, access_filter], operator=Filter.Operator.AND)
+            # 2. Creazione dell'OR logico (è pubblico OPPURE è mio)
+            access_filter = Or(filters=[
+                FieldFilter("is_public", "==", True), 
+                FieldFilter("user_id", "==", current_user_id)
+            ])
+            # 3. Unione logica (keyword AND accesso)
+            final_filter = And(filters=[keyword_filter, access_filter])
         else:
-            final_filter = Filter(
-                [keyword_filter, Filter("is_public", "==", True)],
-                operator=Filter.Operator.AND
-            )
+            # Unione logica semplice (keyword AND è pubblico)
+            final_filter = And(filters=[
+                keyword_filter, 
+                FieldFilter("is_public", "==", True)
+            ])
 
         docs = db_client.collection("articles").where(filter=final_filter).stream()
         for doc in docs:
@@ -138,7 +142,6 @@ def search_articles_by_keyword(keyword: str, current_user_id: Optional[str] = No
             is_public = article.get("is_public", True)
             owner_id = article.get("user_id")
             
-            # Filtra per permessi
             if not is_public and owner_id != current_user_id:
                 continue
 
@@ -156,12 +159,12 @@ def get_latest_articles(limit: int = 5, current_user_id: Optional[str] = None) -
 
     if USE_FIRESTORE:
         if current_user_id:
-            access_filter = Filter(
-                [Filter("is_public", "==", True), Filter("user_id", "==", current_user_id)],
-                operator=Filter.Operator.OR
-            )
+            access_filter = Or(filters=[
+                FieldFilter("is_public", "==", True), 
+                FieldFilter("user_id", "==", current_user_id)
+            ])
         else:
-            access_filter = Filter("is_public", "==", True)
+            access_filter = FieldFilter("is_public", "==", True)
 
         docs = db_client.collection("articles").where(filter=access_filter).order_by("inserted_at", direction=firestore.Query.DESCENDING).limit(limit).stream()
         for doc in docs:
@@ -175,7 +178,6 @@ def get_latest_articles(limit: int = 5, current_user_id: Optional[str] = None) -
                     db = json.load(f)
             db.sort(key=lambda x: x.get("inserted_at", ""), reverse=True)
             
-            # Filtra i risultati
             for article in db:
                 is_public = article.get("is_public", True)
                 owner_id = article.get("user_id")
@@ -196,7 +198,7 @@ def get_user_articles(user_id: str, limit: int = 50) -> list:
     if USE_FIRESTORE:
         docs = (
             db_client.collection("articles")
-            .where("user_id", "==", user_id)
+            .where(filter=FieldFilter("user_id", "==", user_id))
             .order_by("inserted_at", direction=firestore.Query.DESCENDING)
             .limit(limit)
             .stream()

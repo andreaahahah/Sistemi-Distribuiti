@@ -14,7 +14,7 @@ nlp:
   use_google: false
 
 db:
-  use_firestore: false
+  use_firestore: true
   local_db_file: "local_db.json"
 
 logging:
