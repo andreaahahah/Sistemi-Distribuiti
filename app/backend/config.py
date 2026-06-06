@@ -2,17 +2,14 @@ import logging
 import os
 from typing import Optional
 import yaml
-
 class Config:
     _instance: Optional["Config"] = None
     _data: dict = {}
-
     def __new__(cls) -> "Config":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._load_config()
         return cls._instance
-
     def _load_config(self) -> None:
         config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
         if os.path.exists(config_path):
@@ -21,7 +18,6 @@ class Config:
         else:
             self._data = self._default_config()
             self._save_config()
-
     def _default_config(self) -> dict:
         return {
             "app": {
@@ -48,12 +44,10 @@ class Config:
                 "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
             }
         }
-
     def _save_config(self) -> None:
         config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(self._data, f, default_flow_style=False)
-
     def get(self, *keys: str, default=None):
         value = self._data
         for key in keys:
@@ -64,7 +58,6 @@ class Config:
             if value is None:
                 return default
         return value
-
     def setup_logging(self) -> None:
         level = self.get("logging", "level", default="INFO")
         fmt = self.get("logging", "format", default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

@@ -1,73 +1,97 @@
 
 const API_BASE_URL = '';
 let currentArticles = [];
-
 document.getElementById('today-date').textContent =
     new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
-// --- AUTHENTICATION ---
-function updateLoginState() {
-    const token = localStorage.getItem('fake_token');
-    if (token) {
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyDE3gFaO_XIOfm4W6AeasfWaoEn-1pOhYc",
+  authDomain: "sistemidistribuiti-butte-dbfb6.firebaseapp.com",
+  projectId: "sistemidistribuiti-butte-dbfb6",
+  storageBucket: "sistemidistribuiti-butte-dbfb6.firebasestorage.app",
+  messagingSenderId: "655164718204",
+  appId: "1:655164718204:web:147c5c55673213d4629df9"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+function updateLoginState(user) {
+    if (user) {
         document.getElementById('btn-open-login').style.display = 'none';
         document.getElementById('user-menu').style.display = 'flex';
         document.getElementById('upload-sections').style.display = 'block';
-        document.getElementById('masthead-user-name').textContent = token;
+        document.getElementById('masthead-user-name').textContent = user.email.split('@')[0];
     } else {
         document.getElementById('btn-open-login').style.display = 'inline-block';
         document.getElementById('user-menu').style.display = 'none';
         document.getElementById('upload-sections').style.display = 'none';
+        document.getElementById('masthead-user-name').textContent = '';
     }
 }
-
+onAuthStateChanged(auth, (user) => {
+    updateLoginState(user);
+    if (document.getElementById('results-grid')) goHome();
+});
 document.getElementById('btn-open-login').addEventListener('click', () => {
     document.getElementById('loginModal').classList.add('open');
 });
-
 function closeLoginModal() {
     document.getElementById('loginModal').classList.remove('open');
 }
-
 document.getElementById('login-modal-close-btn').addEventListener('click', closeLoginModal);
 document.getElementById('loginModal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('loginModal')) closeLoginModal();
 });
-
-document.getElementById('form-login').addEventListener('submit', (e) => {
+document.getElementById('form-login').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('usernameInput').value.trim();
-    if (username) {
-        localStorage.setItem('fake_token', username);
-        document.getElementById('usernameInput').value = '';
-        updateLoginState();
+    const email = document.getElementById('usernameInput').value.trim();
+    const password = document.getElementById('passwordInput').value;
+    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+        console.warn("API KEY non impostata! Uso fallback locale fittizio.");
+        localStorage.setItem('fake_token', email);
+        updateLoginState({ email: email });
         closeLoginModal();
-        showAlert(`Benvenuto, ${username}!`, 'success');
-        goHome();
+        showAlert(`Benvenuto (Fallback), ${email}!`, 'success');
+        return;
+    }
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        document.getElementById('usernameInput').value = '';
+        document.getElementById('passwordInput').value = '';
+        closeLoginModal();
+        showAlert(`Benvenuto, ${userCredential.user.email}!`, 'success');
+    } catch (error) {
+        showAlert(`Errore di accesso: ${error.message}`, 'danger');
     }
 });
-
-document.getElementById('btn-logout').addEventListener('click', () => {
-    localStorage.removeItem('fake_token');
-    updateLoginState();
+document.getElementById('btn-logout').addEventListener('click', async () => {
+    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+        localStorage.removeItem('fake_token');
+        updateLoginState(null);
+    } else {
+        await signOut(auth);
+    }
     showAlert('Logout effettuato con successo', 'info');
     goHome();
 });
-
-// --- DASHBOARD: I TUOI ARTICOLI ---
 async function loadMyArticles() {
-    const token = localStorage.getItem('fake_token');
-    if (!token) {
+    const isFallback = firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY");
+    const hasAccess = isFallback ? localStorage.getItem('fake_token') : auth.currentUser;
+    if (!hasAccess) {
         showAlert('Devi effettuare il login per vedere i tuoi articoli.', 'warning');
         return;
     }
-
     document.getElementById('searchInput').value = '';
     showEmptyState('Caricamento dei tuoi articoli…');
-
     try {
-        const res = await fetch(`${API_BASE_URL}/api/user/articles`, { headers: getHeaders(null) });
+        const res = await fetch(`${API_BASE_URL}/api/user/articles`, { headers: await getHeaders(null) });
         const data = await res.json();
-
         if (res.ok && data.results.length > 0) {
             displayResults(data.results);
             showAlert(`I tuoi articoli — ${data.count} trovati`, 'info');
@@ -81,17 +105,19 @@ async function loadMyArticles() {
         showAlert('Server non raggiungibile.', 'danger');
     }
 }
-
 document.getElementById('btn-my-articles').addEventListener('click', loadMyArticles);
-
-function getHeaders(contentType = 'application/json') {
+async function getHeaders(contentType = 'application/json') {
     const headers = {};
     if (contentType) headers['Content-Type'] = contentType;
-    const token = localStorage.getItem('fake_token');
-    if (token) headers['Authorization'] = 'Bearer ' + token;
+    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+        const token = localStorage.getItem('fake_token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+    } else if (auth.currentUser) {
+        const token = await getIdToken(auth.currentUser);
+        headers['Authorization'] = 'Bearer ' + token;
+    }
     return headers;
 }
-
 function showAlert(message, type = 'success') {
     const c = document.getElementById('alert-container');
     c.innerHTML = `
@@ -101,20 +127,15 @@ function showAlert(message, type = 'success') {
         </div>`;
     setTimeout(() => { c.innerHTML = ''; }, 5000);
 }
-
 function showEmptyState(msg) {
     document.getElementById('results-container').innerHTML =
         `<div class="empty-state"><span class="empty-state-icon"></span>${msg}</div>`;
     document.getElementById('results-count').textContent = '';
 }
-
 async function loadLatest() {
-    console.log("loadLatest chiamata");
     try {
-        const res = await fetch(`${API_BASE_URL}/latest`, { headers: getHeaders(null) });
-        console.log("Risposta ricevuta:", res);
+        const res = await fetch(`${API_BASE_URL}/latest`, { headers: await getHeaders(null) });
         const data = await res.json();
-        console.log("Data:", data);
         if (res.ok && data.results.length > 0) {
             displayResults(data.results);
         } else {
@@ -125,12 +146,13 @@ async function loadLatest() {
         showAlert('Impossibile contattare il server. Flask è acceso?', 'danger');
     }
 }
-
 document.addEventListener('DOMContentLoaded', () => {
-    updateLoginState();
+    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+        const token = localStorage.getItem('fake_token');
+        updateLoginState(token ? { email: token } : null);
+    }
     loadLatest();
 });
-
 async function goHome() {
     document.getElementById('searchInput').value = '';
     showEmptyState('Caricamento...');
@@ -139,17 +161,13 @@ async function goHome() {
 }
 document.getElementById('btn-clear').addEventListener('click', goHome);
 document.getElementById('logo-home').addEventListener('click', e => { e.preventDefault(); goHome(); });
-
-
 async function executeSearch(query) {
     if (!query) return;
-
     const btn = document.getElementById('btn-search');
     btn.textContent = '…';
     btn.disabled = true;
-
     try {
-        const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`, { headers: getHeaders(null) });
+        const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`, { headers: await getHeaders(null) });
         const data = await res.json();
         if (res.ok) {
             displayResults(data.results);
@@ -165,14 +183,10 @@ async function executeSearch(query) {
         btn.disabled = false;
     }
 }
-
 window.triggerSearch = function (kw) {
     document.getElementById('searchInput').value = kw;
-    //window.scrollTo({ top: 0, behavior: 'smooth' });
     executeSearch(kw);
 };
-
-
 document.getElementById('form-search').addEventListener('submit', (e) => {
     e.preventDefault();
     const q = document.getElementById('searchInput').value.trim();
@@ -182,8 +196,6 @@ document.getElementById('form-search').addEventListener('submit', (e) => {
         executeSearch(q);
     }
 });
-
-
 document.getElementById('form-upload-auto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const url = document.getElementById('urlInput').value;
@@ -192,19 +204,18 @@ document.getElementById('form-upload-auto').addEventListener('submit', async (e)
     btn.textContent = 'Estrazione…'; btn.disabled = true;
     try {
         const res = await fetch(`${API_BASE_URL}/upload`, {
-            method: 'POST', headers: getHeaders(),
+            method: 'POST', headers: await getHeaders(),
             body: JSON.stringify({ url, is_public: isPublic })
         });
         const data = await res.json();
         if (res.ok) {
             showAlert(`Salvato: ${data.data.title}`);
             document.getElementById('urlInput').value = '';
-            window.triggerSearch(data.data.title || '');
+            loadMyArticles();
         } else showAlert(data.error || 'Errore estrazione', 'danger');
     } catch { showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Estrai e Salva'; btn.disabled = false; }
 });
-
 document.getElementById('form-upload-manual').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-manual');
@@ -218,93 +229,77 @@ document.getElementById('form-upload-manual').addEventListener('submit', async (
     btn.textContent = 'Salvataggio…'; btn.disabled = true;
     try {
         const res = await fetch(`${API_BASE_URL}/upload_manual`, {
-            method: 'POST', headers: getHeaders(),
+            method: 'POST', headers: await getHeaders(),
             body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok) {
             showAlert(data.message);
             document.getElementById('form-upload-manual').reset();
-            window.triggerSearch(payload.title);
+            loadMyArticles();
         } else showAlert(data.error || 'Errore salvataggio', 'danger');
     } catch { showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Salva Manualmente'; btn.disabled = false; }
 });
-
 function displayResults(articles) {
     articles.sort((a, b) => {
         const dateA = a.date ? new Date(a.date) : new Date(0);
         const dateB = b.date ? new Date(b.date) : new Date(0);
         return dateB - dateA;
     });
-
     currentArticles = articles;
     const container = document.getElementById('results-container');
     const countEl = document.getElementById('results-count');
     countEl.textContent = articles.length
         ? `${articles.length} articol${articles.length === 1 ? 'o' : 'i'}` : '';
-
     if (!articles.length) { showEmptyState('Nessun risultato trovato.'); return; }
-
     container.innerHTML = '';
     const grid = document.createElement('div');
     grid.className = 'results-grid';
     grid.id = 'results-grid';
     container.appendChild(grid);
-
     articles.forEach((article, index) => {
         const tmpDiv = document.createElement('div');
         tmpDiv.innerHTML = article.content || '';
         const plain = tmpDiv.textContent || '';
         const excerpt = plain.length > 160 ? plain.slice(0, 160) + '…' : plain;
-
         const card = document.createElement('div');
         card.className = 'article-card';
-
         const body = document.createElement('div');
         body.className = 'article-card-body';
         body.innerHTML = `
-            <p class="article-card-meta">${article.date || '—'} &nbsp;·&nbsp; ${article.author || 'Sconosciuto'}</p>
-            <h3 class="article-card-title">${article.title}</h3>
-            <p class="article-card-excerpt">${excerpt}</p>
+            <p class="article-card-meta">${escapeHtml(article.date) || '—'} &nbsp;·&nbsp; ${escapeHtml(article.author) || 'Sconosciuto'}</p>
+            <h3 class="article-card-title">${escapeHtml(article.title)}</h3>
+            <p class="article-card-excerpt">${escapeHtml(excerpt)}</p>
         `;
-
         const footer = document.createElement('div');
         footer.className = 'article-card-footer';
-
         if (article.keywords && article.keywords.length > 0) {
             article.keywords.forEach(kw => {
                 const badge = document.createElement('span');
                 badge.className = 'kw-badge';
                 badge.textContent = kw;
-
                 badge.addEventListener('click', (e) => {
                     e.stopPropagation();
                     window.triggerSearch(kw);
                 });
-
                 footer.appendChild(badge);
             });
         } else {
             footer.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">Nessuna keyword</span>';
         }
-
         body.appendChild(footer);
         card.appendChild(body);
-
         if (article.image_url) {
             const imgWrap = document.createElement('div');
             imgWrap.className = 'article-card-image-wrap';
-
             const img = document.createElement('img');
             img.src = article.image_url;
             img.className = 'article-card-image';
             img.loading = 'lazy';
             imgWrap.appendChild(img);
-
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'card-actions';
-
             const readMore = document.createElement('span');
             readMore.className = 'read-more';
             readMore.textContent = 'Anteprima';
@@ -312,56 +307,57 @@ function displayResults(articles) {
                 e.stopPropagation();
                 openModal(index);
             });
-
             const openPage = document.createElement('span');
             openPage.className = 'read-more';
             openPage.textContent = 'Leggi';
-            openPage.addEventListener('click', (e) => {
+            openPage.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (article.id) {
-                    const token = localStorage.getItem('fake_token');
+                    let token = null;
+                    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+                        token = localStorage.getItem('fake_token');
+                    } else if (auth.currentUser) {
+                        token = await getIdToken(auth.currentUser);
+                    }
                     let url = `${API_BASE_URL}/article/${article.id}`;
                     if (token) url += `?token=${token}`;
                     window.location.href = url;
                 }
             });
-
             actionsDiv.appendChild(readMore);
             actionsDiv.appendChild(openPage);
             imgWrap.appendChild(actionsDiv);
             card.appendChild(imgWrap);
         }
-
         card.addEventListener('click', function (e) {
             if (!e.target.closest('.read-more')) openModal(index);
         });
-
         grid.appendChild(card);
     });
 }
-
 function openModal(index) {
     const a = currentArticles[index];
     if (!a) return;
-
     document.getElementById('articleModalLabel').textContent = a.title;
     document.getElementById('articleModalContent').innerHTML = a.content || 'Nessun contenuto disponibile.';
-
     const img = document.getElementById('articleModalImage');
     if (a.image_url) { img.src = a.image_url; img.style.display = 'block'; }
     else img.style.display = 'none';
-
     const srcDiv = document.getElementById('articleModalSourceDiv');
     if (a.source_url) {
         document.getElementById('articleModalLink').href = a.source_url;
         srcDiv.style.display = 'block';
     } else srcDiv.style.display = 'none';
-
     const openPageBtn = document.getElementById('modal-open-page');
     if (a.id) {
         openPageBtn.style.display = 'inline-block';
-        openPageBtn.onclick = () => {
-            const token = localStorage.getItem('fake_token');
+        openPageBtn.onclick = async () => {
+            let token = null;
+            if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+                token = localStorage.getItem('fake_token');
+            } else if (auth.currentUser) {
+                token = await getIdToken(auth.currentUser);
+            }
             let url = `${API_BASE_URL}/article/${a.id}`;
             if (token) url += `?token=${token}`;
             window.location.href = url;
@@ -369,12 +365,10 @@ function openModal(index) {
     } else {
         openPageBtn.style.display = 'none';
     }
-
     document.getElementById('articleModal').classList.add('open');
     document.body.style.overflow = 'hidden';
     document.querySelector('.modal-box').scrollTop = 0;
 }
-
 function closeModal() {
     document.getElementById('articleModal').classList.remove('open');
     document.body.style.overflow = '';

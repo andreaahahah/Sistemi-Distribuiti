@@ -37,3 +37,5 @@ urllib3==2.7.0
 Werkzeug==3.1.8
 yake==0.4.8
 gunicorn==21.2.0
+google-cloud-pubsub==2.28.0
+firebase-admin==6.5.0

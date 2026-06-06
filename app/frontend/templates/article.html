@@ -53,9 +53,9 @@
                 <header class="article-page-header">
                     <h1 class="article-page-title">{{ article.title }}</h1>
                     <div class="article-page-meta">
-                        <span>📅 {{ article.date or "Data sconosciuta" }}</span>
-                        <span>✍️ {{ article.author or "Sconosciuto" }}</span>
-                        <span>📥 {{ article.upload_method or "—" }}</span>
+                        <span>Data: {{ article.date or "Data sconosciuta" }}</span>
+                        <span>Autore: {{ article.author or "Sconosciuto" }}</span>
+                        <span>Metodo Di Upload: {{ article.upload_method or "—" }}</span>
                     </div>
                 </header>
 
