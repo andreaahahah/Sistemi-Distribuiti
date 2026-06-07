@@ -125,17 +125,33 @@
             <button class="modal-close" id="login-modal-close-btn" aria-label="Chiudi" style="border: none;">✕</button>
         </div>
         <div class="modal-body" style="padding: 2rem 1.6rem;">
-            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.6;">
-                Inserisci le tue credenziali per autenticarti.
+            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.6;" id="login-description">
+                Inserisci le tue credenziali per autenticarti o crea un nuovo account.
             </p>
+            <div id="login-alert-container"></div>
             <form id="form-login">
-                <label class="form-label-small">Email o Nome Utente</label>
-                <input class="field-input" type="text" id="usernameInput" placeholder="es. MarioRossi" required style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1rem;">
+                <label class="form-label-small">Email</label>
+                <input class="field-input" type="email" id="usernameInput" placeholder="nome@esempio.com" required style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1rem;">
                 
                 <label class="form-label-small">Password</label>
-                <input class="field-input" type="password" id="passwordInput" placeholder="••••••••" required style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1.5rem;">
+                <input class="field-input" type="password" id="passwordInput" placeholder="••••••••" required minlength="6" style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1.5rem;">
 
-                <button class="btn-sidebar btn-sidebar-dark" type="submit" id="btn-login" style="font-size: 0.85rem; padding: 0.75rem;">Accedi al Sistema</button>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn-sidebar btn-sidebar-dark" type="submit" id="btn-login" style="font-size: 0.85rem; padding: 0.75rem;">Accedi al Sistema</button>
+                    <button class="btn-sidebar" type="button" id="btn-register-mode" style="font-size: 0.85rem; padding: 0.75rem; background: var(--paper); color: var(--text); border: 1px solid var(--border);">Non hai un account? Registrati</button>
+                </div>
+            </form>
+            <form id="form-register" style="display: none;">
+                <label class="form-label-small">Email</label>
+                <input class="field-input" type="email" id="regEmailInput" placeholder="nome@esempio.com" required style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1rem;">
+                
+                <label class="form-label-small">Password (min. 6 caratteri)</label>
+                <input class="field-input" type="password" id="regPasswordInput" placeholder="••••••••" required minlength="6" style="font-size: 0.95rem; padding: 0.7rem; margin-bottom: 1.5rem;">
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn-sidebar btn-sidebar-dark" type="submit" id="btn-register" style="font-size: 0.85rem; padding: 0.75rem; background: #2e7d32;">Crea Account</button>
+                    <button class="btn-sidebar" type="button" id="btn-login-mode" style="font-size: 0.85rem; padding: 0.75rem; background: var(--paper); color: var(--text); border: 1px solid var(--border);">Hai già un account? Accedi</button>
+                </div>
             </form>
         </div>
     </div>

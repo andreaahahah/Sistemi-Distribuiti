@@ -34,8 +34,7 @@ def handle_app_error(error):
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 try:
-    _firebase_project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "sistemidistribuiti-butte-dbfb6")
-    firebase_admin.initialize_app(options={'projectId': _firebase_project_id})
+    firebase_admin.initialize_app(options={'projectId': 'sistemidistribuiti-butte-dbfb6'})
     logger.info("Firebase Admin inizializzato con successo.")
 except ValueError:
     pass

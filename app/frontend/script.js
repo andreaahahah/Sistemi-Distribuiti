@@ -4,7 +4,7 @@ let currentArticles = [];
 document.getElementById('today-date').textContent =
     new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 const firebaseConfig = {
   apiKey: "AIzaSyDE3gFaO_XIOfm4W6AeasfWaoEn-1pOhYc",
   authDomain: "sistemidistribuiti-butte-dbfb6.firebaseapp.com",
@@ -48,6 +48,51 @@ document.getElementById('login-modal-close-btn').addEventListener('click', close
 document.getElementById('loginModal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('loginModal')) closeLoginModal();
 });
+
+document.getElementById('btn-register-mode').addEventListener('click', () => {
+    document.getElementById('form-login').style.display = 'none';
+    document.getElementById('form-register').style.display = 'block';
+    document.getElementById('loginModalLabel').textContent = 'Registrazione';
+    document.getElementById('login-description').textContent = 'Crea un nuovo account per salvare e proteggere i tuoi articoli.';
+    document.getElementById('login-alert-container').innerHTML = '';
+});
+
+document.getElementById('btn-login-mode').addEventListener('click', () => {
+    document.getElementById('form-register').style.display = 'none';
+    document.getElementById('form-login').style.display = 'block';
+    document.getElementById('loginModalLabel').textContent = 'Accesso';
+    document.getElementById('login-description').textContent = 'Inserisci le tue credenziali per autenticarti o crea un nuovo account.';
+    document.getElementById('login-alert-container').innerHTML = '';
+});
+
+document.getElementById('form-register').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('regEmailInput').value.trim();
+    const password = document.getElementById('regPasswordInput').value;
+    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+        console.warn("API KEY non impostata! Uso fallback locale fittizio.");
+        localStorage.setItem('fake_token', email);
+        updateLoginState({ email: email });
+        closeLoginModal();
+        showAlert(`Account creato (Fallback locale), ${email}!`, 'success');
+        return;
+    }
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        document.getElementById('regEmailInput').value = '';
+        document.getElementById('regPasswordInput').value = '';
+        closeLoginModal();
+        showAlert(`Account creato con successo, benvenuto ${userCredential.user.email}!`, 'success');
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            showModalAlert('Questa email è già registrata. Usa il Login.', 'warning');
+        } else if (error.code === 'auth/weak-password') {
+            showModalAlert('La password deve essere di almeno 6 caratteri.', 'warning');
+        } else {
+            showModalAlert(`Errore di registrazione: ${error.message}`, 'danger');
+        }
+    }
+});
 document.getElementById('form-login').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('usernameInput').value.trim();
@@ -67,7 +112,11 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
         closeLoginModal();
         showAlert(`Benvenuto, ${userCredential.user.email}!`, 'success');
     } catch (error) {
-        showAlert(`Errore di accesso: ${error.message}`, 'danger');
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+            showModalAlert('Credenziali non valide.', 'danger');
+        } else {
+            showModalAlert(`Errore di accesso: ${error.message}`, 'danger');
+        }
     }
 });
 document.getElementById('btn-logout').addEventListener('click', async () => {
@@ -126,6 +175,15 @@ function showAlert(message, type = 'success') {
             <button class="alert-close" onclick="this.parentElement.remove()">×</button>
         </div>`;
     setTimeout(() => { c.innerHTML = ''; }, 5000);
+}
+function showModalAlert(message, type = 'danger') {
+    const c = document.getElementById('login-alert-container');
+    if (!c) return;
+    c.innerHTML = `
+        <div class="alert alert-${type}" style="margin-bottom: 1rem;">
+            <span>${message}</span>
+            <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+        </div>`;
 }
 function showEmptyState(msg) {
     document.getElementById('results-container').innerHTML =
@@ -209,10 +267,14 @@ document.getElementById('form-upload-auto').addEventListener('submit', async (e)
         });
         const data = await res.json();
         if (res.ok) {
-            showAlert(`Salvato: ${data.data.title}`);
+            if (res.status === 201) {
+                showAlert(`Estratto e salvato: ${data.data.title}`, 'success');
+            } else {
+                showAlert(`L'articolo era già presente nel database!`, 'info');
+            }
             document.getElementById('urlInput').value = '';
             loadMyArticles();
-        } else showAlert(data.error || 'Errore estrazione', 'danger');
+        } else showAlert(data.message || data.error || 'Errore estrazione', 'danger');
     } catch { showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Estrai e Salva'; btn.disabled = false; }
 });
@@ -234,10 +296,14 @@ document.getElementById('form-upload-manual').addEventListener('submit', async (
         });
         const data = await res.json();
         if (res.ok) {
-            showAlert(data.message);
+            if (res.status === 201) {
+                showAlert(data.message, 'success');
+            } else {
+                showAlert(`L'articolo era già presente nel database!`, 'info');
+            }
             document.getElementById('form-upload-manual').reset();
             loadMyArticles();
-        } else showAlert(data.error || 'Errore salvataggio', 'danger');
+        } else showAlert(data.message || data.error || 'Errore salvataggio', 'danger');
     } catch { showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Salva Manualmente'; btn.disabled = false; }
 });
