@@ -19,12 +19,12 @@ else:
         with open(LOCAL_DB_FILE, "w", encoding="utf-8") as f:
             json.dump([], f, ensure_ascii=False)
 _lock = threading.Lock()
-def generate_deterministic_id(title: str, date: Optional[str]) -> str:
+def generate_deterministic_id(title: str, date: Optional[str], user_id: Optional[str] = None) -> str:
     import hashlib
-    unique_string = f"{title}_{date}".encode("utf-8")
+    unique_string = f"{title}_{date}_{user_id}".encode("utf-8")
     return hashlib.md5(unique_string).hexdigest()
 def save_article(article_data: dict) -> tuple:
-    custom_id = generate_deterministic_id(article_data["title"], article_data.get("date"))
+    custom_id = generate_deterministic_id(article_data["title"], article_data.get("date"), article_data.get("user_id"))
     if USE_FIRESTORE:
         doc_ref = db_client.collection("articles").document(custom_id)
         doc = doc_ref.get()
