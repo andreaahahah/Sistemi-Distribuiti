@@ -3,6 +3,7 @@ import os
 import json
 import base64
 from flask import Flask, request, jsonify, render_template, abort, send_from_directory
+from markupsafe import escape as html_escape
 from flask_cors import CORS
 from config import Config
 from exceptions import AppError, ValidationError, NoContentError, ArticleNotFoundError, ScraperError
@@ -112,7 +113,7 @@ def upload_article_manual():
     content = data.get("content", "").strip()
     if not title or not content:
         raise ValidationError("'title' e 'content' sono obbligatori e non possono essere vuoti")
-    html_formatted_content = "".join(f"<p>{par}</p>" for par in content.split("\n") if par.strip())
+    html_formatted_content = "".join(f"<p>{html_escape(par)}</p>" for par in content.split("\n") if par.strip())
     doc_data = {
         "title": data["title"],
         "content": html_formatted_content,

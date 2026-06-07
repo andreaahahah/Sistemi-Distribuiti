@@ -171,7 +171,7 @@ function showAlert(message, type = 'success') {
     const c = document.getElementById('alert-container');
     c.innerHTML = `
         <div class="alert alert-${type}">
-            <span>${message}</span>
+            <span>${escapeHtml(message)}</span>
             <button class="alert-close" onclick="this.parentElement.remove()">×</button>
         </div>`;
     setTimeout(() => { c.innerHTML = ''; }, 5000);
@@ -181,7 +181,7 @@ function showModalAlert(message, type = 'danger') {
     if (!c) return;
     c.innerHTML = `
         <div class="alert alert-${type}" style="margin-bottom: 1rem;">
-            <span>${message}</span>
+            <span>${escapeHtml(message)}</span>
             <button class="alert-close" onclick="this.parentElement.remove()">×</button>
         </div>`;
 }
@@ -275,7 +275,7 @@ document.getElementById('form-upload-auto').addEventListener('submit', async (e)
             document.getElementById('urlInput').value = '';
             loadMyArticles();
         } else showAlert(data.message || data.error || 'Errore estrazione', 'danger');
-    } catch { showAlert('Server non raggiungibile.', 'danger'); }
+    } catch (err) { console.error('Errore upload auto:', err); showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Estrai e Salva'; btn.disabled = false; }
 });
 document.getElementById('form-upload-manual').addEventListener('submit', async (e) => {
@@ -304,7 +304,7 @@ document.getElementById('form-upload-manual').addEventListener('submit', async (
             document.getElementById('form-upload-manual').reset();
             loadMyArticles();
         } else showAlert(data.message || data.error || 'Errore salvataggio', 'danger');
-    } catch { showAlert('Server non raggiungibile.', 'danger'); }
+    } catch (err) { console.error('Errore upload manuale:', err); showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Salva Manualmente'; btn.disabled = false; }
 });
 function displayResults(articles) {

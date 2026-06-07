@@ -71,13 +71,6 @@ body {
     min-height: 51px;
 }
 .btn-home:hover { background: var(--ink); color: var(--paper); }
-.masthead-date {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--muted);
-    letter-spacing: 0.06em;
-}
-.btn-home:hover { background: var(--ink); color: var(--paper); }
 .search-section {
     padding: 1.4rem 2.5rem;
     border-bottom: 1px solid var(--border);
