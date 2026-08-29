@@ -43,6 +43,15 @@ app/backend/local_db.json
 Progetto\ SDCC.docx
 appunti.txt
 set_env.ps1
+set_env.sh
+run_docker.sh
+
+# Credenziali GCP (mai includere nel Docker image!)
+credentials.json
+*-key.json
+*service-account*.json
+sistemidistribuiti-*.json
+MIGRAZIONE.md
 
 # Google Cloud SDK
 google-cloud-sdk/

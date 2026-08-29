@@ -6,12 +6,13 @@ document.getElementById('today-date').textContent =
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 const firebaseConfig = {
-  apiKey: "AIzaSyDE3gFaO_XIOfm4W6AeasfWaoEn-1pOhYc",
-  authDomain: "sistemidistribuiti-butte-dbfb6.firebaseapp.com",
-  projectId: "sistemidistribuiti-butte-dbfb6",
-  storageBucket: "sistemidistribuiti-butte-dbfb6.firebasestorage.app",
-  messagingSenderId: "655164718204",
-  appId: "1:655164718204:web:147c5c55673213d4629df9"
+  apiKey: "AIzaSyCvGOe2EufQWm0Gkietyv_Fryl-0HvvCek",
+  authDomain: "sistemi-distribuiti-nuovo.firebaseapp.com",
+  projectId: "sistemi-distribuiti-nuovo",
+  storageBucket: "sistemi-distribuiti-nuovo.firebasestorage.app",
+  messagingSenderId: "114166266178",
+  appId: "1:114166266178:web:65a54756401549eb21b0db",
+  measurementId: "G-7GB2X0Q72F"
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);

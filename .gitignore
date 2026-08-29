@@ -26,8 +26,11 @@ desktop.ini
 
 appunti.txt
 local_db.json
-set_env.ps1
 
+credentials.json
+*-key.json
+*service-account*.json
+sistemidistribuiti-*.json
 
 google-cloud-sdk/
 google-cloud-cli-linux-x86_64.tar.gz

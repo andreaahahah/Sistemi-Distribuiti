@@ -39,3 +39,4 @@ yake==0.4.8
 gunicorn==21.2.0
 google-cloud-pubsub==2.28.0
 firebase-admin==6.5.0
+google-cloud-language==2.14.0

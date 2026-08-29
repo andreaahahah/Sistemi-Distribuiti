@@ -13,7 +13,7 @@ LOCAL_DB_FILE = os.path.join(os.path.dirname(__file__), config.get("db", "local_
 if USE_FIRESTORE:
     from google.cloud import firestore
     from google.cloud.firestore_v1.base_query import FieldFilter, Or, And
-    db_client = firestore.Client()
+    db_client = firestore.Client(project=os.environ.get("GOOGLE_CLOUD_PROJECT"))
 else:
     if not os.path.exists(LOCAL_DB_FILE):
         with open(LOCAL_DB_FILE, "w", encoding="utf-8") as f:
