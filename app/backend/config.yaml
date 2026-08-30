@@ -11,7 +11,7 @@ scraper:
 nlp:
   max_keywords: 10
   language: "it"
-  use_google: false
+  use_google: true
 
 db:
   use_firestore: true

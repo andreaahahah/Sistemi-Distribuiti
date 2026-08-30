@@ -211,3 +211,92 @@ def update_article_keywords(article_id: str, keywords: list) -> bool:
                 return True
     logger.warning(f"update_article_keywords: articolo non trovato nel DB locale: {article_id}")
     return False
+
+# Cache per le keyword uniche (evita query ripetute)
+_keywords_cache = {"keywords": set(), "timestamp": 0}
+_KEYWORDS_CACHE_TTL = 120  # 2 minuti
+
+def get_all_unique_keywords() -> set:
+    """Restituisce un set di tutte le keyword uniche presenti nel DB."""
+    import time
+    now = time.time()
+    if _keywords_cache["keywords"] and (now - _keywords_cache["timestamp"]) < _KEYWORDS_CACHE_TTL:
+        return _keywords_cache["keywords"]
+
+    keywords = set()
+    if USE_FIRESTORE:
+        # Usa projection per efficienza: scarica solo il campo keywords
+        docs = db_client.collection("articles").select(["keywords"]).stream()
+        for doc in docs:
+            data = doc.to_dict()
+            for kw in data.get("keywords", []):
+                keywords.add(kw.lower())
+    else:
+        with _lock:
+            try:
+                with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
+                    db = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                db = []
+        for article in db:
+            for kw in article.get("keywords", []):
+                keywords.add(kw.lower())
+
+    _keywords_cache["keywords"] = keywords
+    _keywords_cache["timestamp"] = now
+    logger.info(f"get_all_unique_keywords: {len(keywords)} keyword uniche trovate")
+    return keywords
+
+
+def search_articles_by_keywords(keywords_list: list, current_user_id: Optional[str] = None,
+                                exclude_ids: Optional[set] = None) -> list:
+    """Cerca articoli che contengono almeno una delle keyword nella lista."""
+    if not keywords_list:
+        return []
+    exclude_ids = exclude_ids or set()
+    results = []
+
+    if USE_FIRESTORE:
+        batch = [kw.lower() for kw in keywords_list[:30]]  # Firestore max 30 per array_contains_any
+        keyword_filter = FieldFilter("keywords", "array_contains_any", batch)
+
+        if current_user_id:
+            access_filter = Or(filters=[
+                FieldFilter("is_public", "==", True),
+                FieldFilter("user_id", "==", current_user_id)
+            ])
+            final_filter = And(filters=[keyword_filter, access_filter])
+        else:
+            final_filter = And(filters=[
+                keyword_filter,
+                FieldFilter("is_public", "==", True)
+            ])
+
+        docs = db_client.collection("articles").where(filter=final_filter).stream()
+        for doc in docs:
+            if doc.id not in exclude_ids:
+                data = doc.to_dict()
+                data["id"] = doc.id
+                results.append(data)
+    else:
+        with _lock:
+            try:
+                with open(LOCAL_DB_FILE, "r", encoding="utf-8") as f:
+                    db = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                db = []
+
+        keywords_lower = {kw.lower() for kw in keywords_list}
+        for article in db:
+            if article.get("id") in exclude_ids:
+                continue
+            is_public = article.get("is_public", True)
+            owner_id = article.get("user_id")
+            if not is_public and owner_id != current_user_id:
+                continue
+            article_kws = {kw.lower() for kw in article.get("keywords", [])}
+            if article_kws & keywords_lower:
+                results.append(article)
+
+    logger.info(f"search_articles_by_keywords: {len(results)} risultati per {len(keywords_list)} keyword")
+    return results

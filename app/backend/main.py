@@ -22,10 +22,10 @@ app = Flask(__name__, template_folder=TEMPLATES_DIR)
 CORS(app)
 @app.route("/style.css")
 def serve_css():
-    return send_from_directory(FRONTEND_DIR, "style.css", mimetype="text/css")
+    return send_from_directory(FRONTEND_DIR, "style.css", mimetype="text/css", max_age=0)
 @app.route("/script.js")
 def serve_js():
-    return send_from_directory(FRONTEND_DIR, "script.js", mimetype="application/javascript")
+    return send_from_directory(FRONTEND_DIR, "script.js", mimetype="application/javascript", max_age=0)
 @app.errorhandler(AppError)
 def handle_app_error(error):
     logger.error(f"AppError: {error.message}")
@@ -146,6 +146,26 @@ def search():
         "count": len(results),
         "results": results
     }), 200
+
+@app.route("/search/related", methods=["GET"])
+def search_related():
+    """Endpoint separato per la ricerca correlata (asincrona dal frontend).
+    Chiamato dopo /search quando i risultati diretti sono pochi."""
+    query = request.args.get("q")
+    if not query:
+        raise ValidationError("Parametro 'q' mancante")
+    # IDs degli articoli già mostrati (per evitare duplicati)
+    exclude = request.args.get("exclude", "")
+    exclude_ids = set(exclude.split(",")) if exclude else set()
+    current_user = get_current_user()
+    try:
+        from related_search import find_related_articles
+        related = find_related_articles(query, current_user, exclude_ids)
+        logger.info(f"Ricerca correlata '{query}': {related['count']} risultati")
+        return jsonify(related), 200
+    except Exception as e:
+        logger.error(f"Errore ricerca correlata per '{query}': {e}")
+        return jsonify({"keywords_found": [], "count": 0, "results": []}), 200
 @app.route("/latest", methods=["GET"])
 def latest_articles():
     current_user = get_current_user()

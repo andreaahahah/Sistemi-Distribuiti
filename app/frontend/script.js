@@ -6,13 +6,13 @@ document.getElementById('today-date').textContent =
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 const firebaseConfig = {
-  apiKey: "AIzaSyCvGOe2EufQWm0Gkietyv_Fryl-0HvvCek",
-  authDomain: "sistemi-distribuiti-nuovo.firebaseapp.com",
-  projectId: "sistemi-distribuiti-nuovo",
-  storageBucket: "sistemi-distribuiti-nuovo.firebasestorage.app",
-  messagingSenderId: "114166266178",
-  appId: "1:114166266178:web:65a54756401549eb21b0db",
-  measurementId: "G-7GB2X0Q72F"
+    apiKey: "AIzaSyCvGOe2EufQWm0Gkietyv_Fryl-0HvvCek",
+    authDomain: "sistemi-distribuiti-nuovo.firebaseapp.com",
+    projectId: "sistemi-distribuiti-nuovo",
+    storageBucket: "sistemi-distribuiti-nuovo.firebasestorage.app",
+    messagingSenderId: "114166266178",
+    appId: "1:114166266178:web:65a54756401549eb21b0db",
+    measurementId: "G-7GB2X0Q72F"
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -225,22 +225,177 @@ async function executeSearch(query) {
     const btn = document.getElementById('btn-search');
     btn.textContent = '…';
     btn.disabled = true;
+    const RELATED_THRESHOLD = 4;
     try {
+        // 1. Fetch risultati diretti (veloce)
         const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`, { headers: await getHeaders(null) });
         const data = await res.json();
-        if (res.ok) {
-            displayResults(data.results);
-            if (!data.results.length) showAlert(`Nessun risultato per "${query}"`, 'warning');
-            else showAlert(`${data.results.length} risultati per "${query}"`, 'success');
-        } else {
+        btn.textContent = 'Cerca';
+        btn.disabled = false;
+        if (!res.ok) {
             showAlert(data.error || 'Errore ricerca', 'danger');
+            return;
+        }
+        if (data.results.length > 0) {
+            displayResults(data.results);
+            showAlert(`${data.results.length} risultat${data.results.length === 1 ? 'o' : 'i'} per "${query}"`, 'success');
+        } else {
+            showEmptyState(`Nessun risultato per "${query}"`);
+            showAlert(`Nessun risultato per "${query}"`, 'warning');
+        }
+        // 2. Se pochi risultati, carica correlati in background
+        if (data.count <= RELATED_THRESHOLD) {
+            const excludeIds = data.results.map(r => r.id).join(',');
+            loadRelatedAsync(query, excludeIds, data.count === 0);
         }
     } catch (err) {
         showAlert('Server non raggiungibile. Flask è attivo?', 'danger');
-    } finally {
         btn.textContent = 'Cerca';
         btn.disabled = false;
     }
+}
+async function loadRelatedAsync(query, excludeIds, noDirectResults) {
+    // Mostra indicatore di caricamento correlati
+    const container = document.getElementById('results-container');
+    const loader = document.createElement('div');
+    loader.className = 'related-loading';
+    loader.id = 'related-loading';
+    loader.textContent = 'Ricerca articoli correlati…';
+    container.appendChild(loader);
+    try {
+        let url = `${API_BASE_URL}/search/related?q=${encodeURIComponent(query)}`;
+        if (excludeIds) url += `&exclude=${encodeURIComponent(excludeIds)}`;
+        const res = await fetch(url, { headers: await getHeaders(null) });
+        const related = await res.json();
+        // Rimuovi loader
+        const loaderEl = document.getElementById('related-loading');
+        if (loaderEl) loaderEl.remove();
+        if (res.ok && related.count > 0) {
+            displayRelatedResults(related);
+            if (noDirectResults) {
+                showAlert(`Trovati ${related.count} articol${related.count === 1 ? 'o correlato' : 'i correlati'} per "${query}"`, 'info');
+            }
+        }
+    } catch (err) {
+        const loaderEl = document.getElementById('related-loading');
+        if (loaderEl) loaderEl.remove();
+        console.error('Errore caricamento correlati:', err);
+    }
+}
+function displayRelatedResults(related) {
+    const container = document.getElementById('results-container');
+    const section = document.createElement('div');
+    section.className = 'related-section';
+    section.id = 'related-section';
+    // Header
+    const header = document.createElement('div');
+    header.className = 'related-header';
+    header.innerHTML = `
+        <span class="related-title">Correlati alla tua ricerca</span>
+        <span class="related-count">${related.count} articol${related.count === 1 ? 'o' : 'i'}</span>
+    `;
+    section.appendChild(header);
+    // Keyword badges
+    if (related.keywords_found && related.keywords_found.length > 0) {
+        const kwRow = document.createElement('div');
+        kwRow.className = 'related-keywords';
+        const label = document.createElement('span');
+        label.className = 'related-kw-label';
+        label.textContent = 'Keyword correlate:';
+        kwRow.appendChild(label);
+        related.keywords_found.forEach(kw => {
+            const badge = document.createElement('span');
+            badge.className = 'kw-badge related-kw-badge';
+            badge.textContent = kw;
+            badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.triggerSearch(kw);
+            });
+            kwRow.appendChild(badge);
+        });
+        section.appendChild(kwRow);
+    }
+    // Article cards grid
+    const grid = document.createElement('div');
+    grid.className = 'results-grid related-grid';
+    const baseIndex = currentArticles.length;
+    related.results.forEach((article, i) => {
+        currentArticles.push(article);
+        const tmpDiv = document.createElement('div');
+        tmpDiv.innerHTML = article.content || '';
+        const plain = tmpDiv.textContent || '';
+        const excerpt = plain.length > 160 ? plain.slice(0, 160) + '…' : plain;
+        const card = document.createElement('div');
+        card.className = 'article-card related-card';
+        const body = document.createElement('div');
+        body.className = 'article-card-body';
+        body.innerHTML = `
+            <p class="article-card-meta">${escapeHtml(article.date) || '—'} &nbsp;·&nbsp; ${escapeHtml(article.author) || 'Sconosciuto'}</p>
+            <h3 class="article-card-title">${escapeHtml(article.title)}</h3>
+            <p class="article-card-excerpt">${escapeHtml(excerpt)}</p>
+        `;
+        const footer = document.createElement('div');
+        footer.className = 'article-card-footer';
+        if (article.keywords && article.keywords.length > 0) {
+            article.keywords.forEach(kw => {
+                const badge = document.createElement('span');
+                badge.className = 'kw-badge';
+                badge.textContent = kw;
+                badge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    window.triggerSearch(kw);
+                });
+                footer.appendChild(badge);
+            });
+        }
+        body.appendChild(footer);
+        card.appendChild(body);
+        if (article.image_url) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'article-card-image-wrap';
+            const img = document.createElement('img');
+            img.src = article.image_url;
+            img.className = 'article-card-image';
+            img.loading = 'lazy';
+            imgWrap.appendChild(img);
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'card-actions';
+            const readMore = document.createElement('span');
+            readMore.className = 'read-more';
+            readMore.textContent = 'Anteprima';
+            readMore.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openModal(baseIndex + i);
+            });
+            const openPage = document.createElement('span');
+            openPage.className = 'read-more';
+            openPage.textContent = 'Leggi';
+            openPage.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (article.id) {
+                    let token = null;
+                    if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
+                        token = localStorage.getItem('fake_token');
+                    } else if (auth.currentUser) {
+                        token = await getIdToken(auth.currentUser);
+                    }
+                    let url = `${API_BASE_URL}/article/${article.id}`;
+                    if (token) url += `?token=${token}`;
+                    window.location.href = url;
+                }
+            });
+            actionsDiv.appendChild(readMore);
+            actionsDiv.appendChild(openPage);
+            imgWrap.appendChild(actionsDiv);
+            card.appendChild(imgWrap);
+        }
+        card.addEventListener('click', function (e) {
+            if (!e.target.closest('.read-more')) openModal(baseIndex + i);
+        });
+        grid.appendChild(card);
+    });
+    section.appendChild(grid);
+    container.appendChild(section);
 }
 window.triggerSearch = function (kw) {
     document.getElementById('searchInput').value = kw;
