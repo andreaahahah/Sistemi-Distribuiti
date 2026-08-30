@@ -23,16 +23,22 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 function updateLoginState(user) {
+    const sidebar = document.querySelector('.sidebar');
+    const mainGrid = document.querySelector('.main-grid');
     if (user) {
         document.getElementById('btn-open-login').style.display = 'none';
         document.getElementById('user-menu').style.display = 'flex';
         document.getElementById('upload-sections').style.display = 'block';
         document.getElementById('masthead-user-name').textContent = user.email.split('@')[0];
+        sidebar.style.display = '';
+        mainGrid.classList.remove('full-width');
     } else {
         document.getElementById('btn-open-login').style.display = 'inline-block';
         document.getElementById('user-menu').style.display = 'none';
         document.getElementById('upload-sections').style.display = 'none';
         document.getElementById('masthead-user-name').textContent = '';
+        sidebar.style.display = 'none';
+        mainGrid.classList.add('full-width');
     }
 }
 onAuthStateChanged(auth, (user) => {
