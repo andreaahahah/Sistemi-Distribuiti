@@ -157,7 +157,7 @@ def _nlp_semantic_matches(query: str, keywords: Set[str]) -> Dict[str, float]:
 
 
 def find_related_articles(query: str, current_user_id: Optional[str],
-                          direct_result_ids: Set[str], max_related: int = 8) -> Dict:
+                          direct_result_ids: Set[str], max_related: int = 5) -> Dict:
     """Funzione principale: trova articoli correlati alla query.
 
     Usa 3 strategie in cascata per massima qualità:
@@ -198,7 +198,7 @@ def find_related_articles(query: str, current_user_id: Optional[str],
 
     # Ordina per score e prendi le migliori keyword
     sorted_kws = sorted(all_matches.items(), key=lambda x: x[1], reverse=True)
-    top_keywords = [kw for kw, _ in sorted_kws[:12]]
+    top_keywords = [kw for kw, _ in sorted_kws[:10]]
 
     logger.info(f"[Related] Top keyword correlate per '{query}': {top_keywords}")
 
@@ -208,7 +208,7 @@ def find_related_articles(query: str, current_user_id: Optional[str],
     )
 
     return {
-        "keywords_found": [kw for kw, _ in sorted_kws[:6]],
+        "keywords_found": [kw for kw, _ in sorted_kws[:5]],
         "count": len(related_articles[:max_related]),
         "results": related_articles[:max_related]
     }

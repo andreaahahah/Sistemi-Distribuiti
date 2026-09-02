@@ -85,26 +85,28 @@ def get_article_by_id(article_id: str, current_user_id: Optional[str] = None) ->
                 return article
     return None
 def search_articles_by_keyword(keyword: str, current_user_id: Optional[str] = None) -> list:
-    keyword = keyword.lower()
+    query = keyword.lower().strip()
+    if not query:
+        return []
+    
     results = []
+    candidates = []
+    seen_ids = set()
+
     if USE_FIRESTORE:
-        keyword_filter = FieldFilter("keywords", "array_contains", keyword)
         if current_user_id:
             access_filter = Or(filters=[
                 FieldFilter("is_public", "==", True), 
                 FieldFilter("user_id", "==", current_user_id)
             ])
-            final_filter = And(filters=[keyword_filter, access_filter])
         else:
-            final_filter = And(filters=[
-                keyword_filter, 
-                FieldFilter("is_public", "==", True)
-            ])
-        docs = db_client.collection("articles").where(filter=final_filter).stream()
+            access_filter = FieldFilter("is_public", "==", True)
+
+        docs = db_client.collection("articles").where(filter=access_filter).stream()
         for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
-            results.append(data)
+            candidates.append(data)
     else:
         with _lock:
             try:
@@ -112,15 +114,48 @@ def search_articles_by_keyword(keyword: str, current_user_id: Optional[str] = No
                     db = json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 db = []
-        for article in db:
-            is_public = article.get("is_public", True)
-            owner_id = article.get("user_id")
-            if not is_public and owner_id != current_user_id:
-                continue
-            keywords_lower = [kw.lower() for kw in article.get("keywords", [])]
-            if keyword in keywords_lower:
-                results.append(article)
-    logger.info(f"Ricerca '{keyword}': {len(results)} risultati")
+        candidates = db
+
+    for article in candidates:
+        article_id = article.get("id")
+        if article_id in seen_ids:
+            continue
+
+        is_public = article.get("is_public", True)
+        owner_id = article.get("user_id")
+        if not is_public and owner_id != current_user_id:
+            continue
+
+        title_lower = article.get("title", "").lower()
+        keywords_lower = [kw.lower() for kw in article.get("keywords", [])]
+
+        is_match = False
+        score = 0
+
+        if query in keywords_lower:
+            is_match = True
+            score = 100
+        elif query in title_lower:
+            is_match = True
+            score = 90
+        else:
+            for kw in keywords_lower:
+                if len(query) >= 2 and (query in kw or kw in query):
+                    is_match = True
+                    score = 80
+                    break
+
+        if is_match:
+            art_copy = dict(article)
+            art_copy["_search_score"] = score
+            results.append(art_copy)
+            seen_ids.add(article_id)
+
+    results.sort(key=lambda x: (x.get("_search_score", 0), x.get("inserted_at", "")), reverse=True)
+    for res in results:
+        res.pop("_search_score", None)
+
+    logger.info(f"Ricerca flessibile '{query}': {len(results)} risultati trovati")
     return results
 def get_latest_articles(limit: int = 5, current_user_id: Optional[str] = None) -> list:
     results = []

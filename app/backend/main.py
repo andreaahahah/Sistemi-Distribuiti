@@ -34,7 +34,7 @@ def handle_app_error(error):
     return response
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
-FIREBASE_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "sistemidistribuiti-butte-dbfb6")
+FIREBASE_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "sistemi-distribuiti-nuovo")
 try:
     firebase_admin.initialize_app(options={'projectId': FIREBASE_PROJECT_ID})
     logger.info(f"Firebase Admin inizializzato con successo (project: {FIREBASE_PROJECT_ID}).")
@@ -102,7 +102,7 @@ def upload_article():
     msg = "Articolo salvato con successo" if is_new else "Articolo già presente nel sistema"
     logger.info(f"{msg}: {saved_doc['id']}")
     if is_new:
-        dispatch_nlp_task(saved_doc["id"], testo["plain_text"])
+        dispatch_nlp_task(saved_doc["id"], testo["plain_text"], title=testo["title"])
     return jsonify({"message": msg, "data": saved_doc}), status
 @app.route("/upload_manual", methods=["POST"])
 def upload_article_manual():
@@ -131,7 +131,7 @@ def upload_article_manual():
     msg = "Articolo salvato con successo" if is_new else "Articolo già presente nel sistema"
     logger.info(f"{msg}: {saved_doc['id']}")
     if is_new:
-        dispatch_nlp_task(saved_doc["id"], content)
+        dispatch_nlp_task(saved_doc["id"], content, title=title)
     return jsonify({"message": msg, "data": saved_doc}), status
 @app.route("/search", methods=["GET"])
 def search():
@@ -214,10 +214,11 @@ def pubsub_push():
             data = json.loads(data_str)
             article_id = data.get("article_id")
             text = data.get("text")
+            title = data.get("title", "")
             if not article_id or not text:
                 raise ValueError("Dati mancanti nel payload")
             logger.info(f"[Pub/Sub Push] Ricevuto messaggio per elaborazione NLP articolo: {article_id}")
-            _run_local(article_id, text)
+            _run_local(article_id, text, title=title)
             return jsonify({"message": "ACK"}), 200
         except Exception as e:
             logger.exception("Errore nell'elaborazione del messaggio Pub/Sub")

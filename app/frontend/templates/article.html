@@ -136,6 +136,24 @@
         .btn-home {
             display: none;
         }
+        .nlp-badge-pending {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(217, 119, 6, 0.12);
+            color: #d97706;
+            border: 1px solid rgba(217, 119, 6, 0.3);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            animation: pulseNlp 1.8s infinite ease-in-out;
+        }
+
+        @keyframes pulseNlp {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
     </style>
 </head>
 
@@ -174,16 +192,20 @@
                 {{ article.content|safe }}
             </div>
 
-            {% if article.keywords and article.keywords|length > 0 %}
             <div class="article-page-keywords">
                 <h3>Keywords</h3>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    {% for kw in article.keywords %}
-                    <a href="/search?q={{ kw }}" class="kw-badge">{{ kw }}</a>
-                    {% endfor %}
+                    {% if article.keywords and article.keywords|length > 0 %}
+                        {% for kw in article.keywords %}
+                        <a href="/?q={{ kw|urlencode }}" class="kw-badge">{{ kw }}</a>
+                        {% endfor %}
+                    {% elif article.nlp_status != 'DONE' %}
+                        <span class="nlp-badge-pending">⏳ Estrazione in corso...</span>
+                    {% else %}
+                        <span style="color: var(--muted); font-size: 0.9rem;">Nessuna keyword trovata</span>
+                    {% endif %}
                 </div>
             </div>
-            {% endif %}
 
             {% if article.source_url %}
             <div class="article-page-source">
@@ -199,6 +221,28 @@
             weekday: "long", day: "numeric", month: "long", year: "numeric"
         });
     </script>
+
+    {% if article and article.id and article.nlp_status != 'DONE' %}
+    <script>
+        (function() {
+            const articleId = "{{ article.id }}";
+            const pollTimer = setInterval(async () => {
+                try {
+                    const res = await fetch('/article/' + articleId + '/json');
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.nlp_status === 'DONE' || (data.keywords && data.keywords.length > 0)) {
+                            clearInterval(pollTimer);
+                            window.location.reload();
+                        }
+                    }
+                } catch (e) {
+                    console.error("Errore polling status NLP:", e);
+                }
+            }, 2000);
+        })();
+    </script>
+    {% endif %}
 </body>
 
 </html>

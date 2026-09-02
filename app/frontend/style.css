@@ -590,3 +590,22 @@ textarea.field-input { resize: vertical; min-height: 70px; }
 .related-grid {
     gap: 2px;
 }
+.nlp-badge-pending {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(217, 119, 6, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(217, 119, 6, 0.3);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.04em;
+    animation: pulseNlp 1.8s infinite ease-in-out;
+}
+@keyframes pulseNlp {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}

@@ -43,7 +43,11 @@ function updateLoginState(user) {
 }
 onAuthStateChanged(auth, (user) => {
     updateLoginState(user);
-    if (document.getElementById('results-grid')) goHome();
+    const searchVal = document.getElementById('searchInput')?.value?.trim();
+    const urlQuery = new URLSearchParams(window.location.search).get('q');
+    if (!searchVal && !urlQuery && document.getElementById('results-grid')) {
+        goHome();
+    }
 });
 document.getElementById('btn-open-login').addEventListener('click', () => {
     document.getElementById('loginModal').classList.add('open');
@@ -216,7 +220,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const token = localStorage.getItem('fake_token');
         updateLoginState(token ? { email: token } : null);
     }
-    loadLatest();
+    const urlParams = new URLSearchParams(window.location.search);
+    const query = urlParams.get('q');
+    if (query) {
+        document.getElementById('searchInput').value = query;
+        executeSearch(query);
+    } else {
+        loadLatest();
+    }
 });
 async function goHome() {
     document.getElementById('searchInput').value = '';
@@ -325,7 +336,8 @@ function displayRelatedResults(related) {
     const grid = document.createElement('div');
     grid.className = 'results-grid related-grid';
     const baseIndex = currentArticles.length;
-    related.results.forEach((article, i) => {
+    const articlesToShow = (related.results || []).slice(0, 5);
+    articlesToShow.forEach((article, i) => {
         currentArticles.push(article);
         const tmpDiv = document.createElement('div');
         tmpDiv.innerHTML = article.content || '';
@@ -513,6 +525,8 @@ function displayResults(articles) {
                 });
                 footer.appendChild(badge);
             });
+        } else if (article.nlp_status !== 'DONE') {
+            footer.innerHTML = '<span class="nlp-badge-pending">⏳ Estrazione in corso...</span>';
         } else {
             footer.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">Nessuna keyword</span>';
         }
@@ -562,6 +576,40 @@ function displayResults(articles) {
         });
         grid.appendChild(card);
     });
+
+    startNlpPollingIfNeeded();
+}
+
+let nlpPollInterval = null;
+function startNlpPollingIfNeeded() {
+    if (nlpPollInterval) {
+        clearInterval(nlpPollInterval);
+        nlpPollInterval = null;
+    }
+    const pending = currentArticles.filter(a => a && a.id && a.nlp_status !== 'DONE' && (!a.keywords || a.keywords.length === 0));
+    if (pending.length === 0) return;
+
+    nlpPollInterval = setInterval(async () => {
+        let updatedCount = 0;
+        for (const art of pending) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/article/${art.id}/json`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.nlp_status === 'DONE' || (data.keywords && data.keywords.length > 0)) {
+                        art.keywords = data.keywords || [];
+                        art.nlp_status = 'DONE';
+                        updatedCount++;
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error for article:", art.id, e);
+            }
+        }
+        if (updatedCount > 0) {
+            displayResults([...currentArticles]);
+        }
+    }, 2500);
 }
 function openModal(index) {
     const a = currentArticles[index];
