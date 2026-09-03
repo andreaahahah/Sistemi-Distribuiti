@@ -20,6 +20,15 @@ TEMPLATES_DIR = os.path.join(FRONTEND_DIR, "templates")
 STATIC_DIR = os.path.join(FRONTEND_DIR, "static") if os.path.exists(os.path.join(FRONTEND_DIR, "static")) else FRONTEND_DIR
 app = Flask(__name__, template_folder=TEMPLATES_DIR)
 CORS(app)
+
+# Campi interni da non esporre al client
+_INTERNAL_FIELDS = {"user_id", "upload_method"}
+
+def sanitize_article(article: dict) -> dict:
+    """Rimuove i campi interni dall'articolo prima di restituirlo al client."""
+    if not article:
+        return article
+    return {k: v for k, v in article.items() if k not in _INTERNAL_FIELDS}
 @app.route("/style.css")
 def serve_css():
     return send_from_directory(FRONTEND_DIR, "style.css", mimetype="text/css", max_age=0)
@@ -81,7 +90,7 @@ def upload_article():
         raise
     except Exception as e:
         logger.exception("Errore scraper")
-        raise ScraperError(f"Scraper fallito: {str(e)}")
+        raise ScraperError("Impossibile estrarre l'articolo dall'URL fornito")
     if not testo["html_content"]:
         raise NoContentError("Contenuto articolo non trovato nella pagina")
     doc_data = {
@@ -103,7 +112,7 @@ def upload_article():
     logger.info(f"{msg}: {saved_doc['id']}")
     if is_new:
         dispatch_nlp_task(saved_doc["id"], testo["plain_text"], title=testo["title"])
-    return jsonify({"message": msg, "data": saved_doc}), status
+    return jsonify({"message": msg, "data": sanitize_article(saved_doc)}), status
 @app.route("/upload_manual", methods=["POST"])
 def upload_article_manual():
     current_user = get_current_user()
@@ -132,7 +141,7 @@ def upload_article_manual():
     logger.info(f"{msg}: {saved_doc['id']}")
     if is_new:
         dispatch_nlp_task(saved_doc["id"], content, title=title)
-    return jsonify({"message": msg, "data": saved_doc}), status
+    return jsonify({"message": msg, "data": sanitize_article(saved_doc)}), status
 @app.route("/search", methods=["GET"])
 def search():
     query = request.args.get("q")
@@ -144,7 +153,7 @@ def search():
     return jsonify({
         "query": query,
         "count": len(results),
-        "results": results
+        "results": [sanitize_article(r) for r in results]
     }), 200
 
 @app.route("/search/related", methods=["GET"])
@@ -162,6 +171,7 @@ def search_related():
         from related_search import find_related_articles
         related = find_related_articles(query, current_user, exclude_ids)
         logger.info(f"Ricerca correlata '{query}': {related['count']} risultati")
+        related["results"] = [sanitize_article(r) for r in related.get("results", [])]
         return jsonify(related), 200
     except Exception as e:
         logger.error(f"Errore ricerca correlata per '{query}': {e}")
@@ -172,7 +182,7 @@ def latest_articles():
     results = get_latest_articles(5, current_user)
     return jsonify({
         "count": len(results),
-        "results": results
+        "results": [sanitize_article(r) for r in results]
     }), 200
 @app.route("/api/user/articles", methods=["GET"])
 def user_articles():
@@ -182,9 +192,8 @@ def user_articles():
     results = get_user_articles(current_user)
     logger.info(f"Dashboard utente '{current_user}': {len(results)} articoli")
     return jsonify({
-        "user_id": current_user,
         "count": len(results),
-        "results": results
+        "results": [sanitize_article(r) for r in results]
     }), 200
 @app.route("/article/<article_id>/json", methods=["GET"])
 def article_json(article_id: str):
@@ -192,7 +201,7 @@ def article_json(article_id: str):
     article = get_article_by_id(article_id, current_user)
     if not article:
         raise ArticleNotFoundError("Articolo non trovato o accesso negato")
-    return jsonify(article), 200
+    return jsonify(sanitize_article(article)), 200
 @app.route("/pubsub/push", methods=["POST"])
 def pubsub_push():
     expected_token = os.environ.get("PUBSUB_VERIFICATION_TOKEN")
@@ -222,7 +231,7 @@ def pubsub_push():
             return jsonify({"message": "ACK"}), 200
         except Exception as e:
             logger.exception("Errore nell'elaborazione del messaggio Pub/Sub")
-            return jsonify({"message": f"NACK: {str(e)}"}), 500
+            return jsonify({"message": "Errore nell'elaborazione del messaggio"}), 500
     return jsonify({"message": "Dati non trovati nel messaggio"}), 400
 if __name__ == "__main__":
     host = config.get("app", "host", default="0.0.0.0")

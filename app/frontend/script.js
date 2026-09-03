@@ -81,7 +81,6 @@ document.getElementById('form-register').addEventListener('submit', async (e) =>
     const email = document.getElementById('regEmailInput').value.trim();
     const password = document.getElementById('regPasswordInput').value;
     if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
-        console.warn("API KEY non impostata! Uso fallback locale fittizio.");
         localStorage.setItem('fake_token', email);
         updateLoginState({ email: email });
         closeLoginModal();
@@ -100,7 +99,7 @@ document.getElementById('form-register').addEventListener('submit', async (e) =>
         } else if (error.code === 'auth/weak-password') {
             showModalAlert('La password deve essere di almeno 6 caratteri.', 'warning');
         } else {
-            showModalAlert(`Errore di registrazione: ${error.message}`, 'danger');
+            showModalAlert('Errore durante la registrazione. Riprova più tardi.', 'danger');
         }
     }
 });
@@ -109,7 +108,6 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
     const email = document.getElementById('usernameInput').value.trim();
     const password = document.getElementById('passwordInput').value;
     if (firebaseConfig.apiKey.includes("INSERISCI_LA_TUA_API_KEY")) {
-        console.warn("API KEY non impostata! Uso fallback locale fittizio.");
         localStorage.setItem('fake_token', email);
         updateLoginState({ email: email });
         closeLoginModal();
@@ -126,7 +124,7 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
             showModalAlert('Credenziali non valide.', 'danger');
         } else {
-            showModalAlert(`Errore di accesso: ${error.message}`, 'danger');
+            showModalAlert('Errore durante l\'accesso. Riprova più tardi.', 'danger');
         }
     }
 });
@@ -161,7 +159,6 @@ async function loadMyArticles() {
             showAlert(data.message || 'Errore nel caricamento', 'danger');
         }
     } catch (err) {
-        console.error("Errore loadMyArticles:", err);
         showAlert('Server non raggiungibile.', 'danger');
     }
 }
@@ -211,8 +208,7 @@ async function loadLatest() {
             showEmptyState('Nessun articolo nel database. Inizia caricandone uno!');
         }
     } catch (err) {
-        console.error("Errore loadLatest:", err);
-        showAlert('Impossibile contattare il server. Flask è acceso?', 'danger');
+        showAlert('Impossibile contattare il server.', 'danger');
     }
 }
 document.addEventListener('DOMContentLoaded', () => {
@@ -266,7 +262,7 @@ async function executeSearch(query) {
             loadRelatedAsync(query, excludeIds, data.count === 0);
         }
     } catch (err) {
-        showAlert('Server non raggiungibile. Flask è attivo?', 'danger');
+        showAlert('Server non raggiungibile.', 'danger');
         btn.textContent = 'Cerca';
         btn.disabled = false;
     }
@@ -296,7 +292,6 @@ async function loadRelatedAsync(query, excludeIds, noDirectResults) {
     } catch (err) {
         const loaderEl = document.getElementById('related-loading');
         if (loaderEl) loaderEl.remove();
-        console.error('Errore caricamento correlati:', err);
     }
 }
 function displayRelatedResults(related) {
@@ -444,12 +439,13 @@ document.getElementById('form-upload-auto').addEventListener('submit', async (e)
             if (res.status === 201) {
                 showAlert(`Estratto e salvato: ${data.data.title}`, 'success');
             } else {
-                showAlert(`L'articolo era già presente nel database!`, 'info');
+                showAlert(`L'articolo "${data.data.title}" è già presente nel database.`, 'warning');
             }
             document.getElementById('urlInput').value = '';
-            loadMyArticles();
+            currentArticles.unshift(data.data);
+            displayResults([...currentArticles], true);
         } else showAlert(data.message || data.error || 'Errore estrazione', 'danger');
-    } catch (err) { console.error('Errore upload auto:', err); showAlert('Server non raggiungibile.', 'danger'); }
+    } catch (err) { showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Estrai e Salva'; btn.disabled = false; }
 });
 document.getElementById('form-upload-manual').addEventListener('submit', async (e) => {
@@ -473,20 +469,23 @@ document.getElementById('form-upload-manual').addEventListener('submit', async (
             if (res.status === 201) {
                 showAlert(data.message, 'success');
             } else {
-                showAlert(`L'articolo era già presente nel database!`, 'info');
+                showAlert(`L'articolo "${data.data.title}" è già presente nel database.`, 'warning');
             }
             document.getElementById('form-upload-manual').reset();
-            loadMyArticles();
+            currentArticles.unshift(data.data);
+            displayResults([...currentArticles], true);
         } else showAlert(data.message || data.error || 'Errore salvataggio', 'danger');
-    } catch (err) { console.error('Errore upload manuale:', err); showAlert('Server non raggiungibile.', 'danger'); }
+    } catch (err) { showAlert('Server non raggiungibile.', 'danger'); }
     finally { btn.textContent = 'Salva Manualmente'; btn.disabled = false; }
 });
-function displayResults(articles) {
-    articles.sort((a, b) => {
-        const dateA = a.date ? new Date(a.date) : new Date(0);
-        const dateB = b.date ? new Date(b.date) : new Date(0);
-        return dateB - dateA;
-    });
+function displayResults(articles, skipSort = false) {
+    if (!skipSort) {
+        articles.sort((a, b) => {
+            const dateA = a.date ? new Date(a.date) : new Date(0);
+            const dateB = b.date ? new Date(b.date) : new Date(0);
+            return dateB - dateA;
+        });
+    }
     currentArticles = articles;
     const container = document.getElementById('results-container');
     const countEl = document.getElementById('results-count');
@@ -603,11 +602,11 @@ function startNlpPollingIfNeeded() {
                     }
                 }
             } catch (e) {
-                console.error("Polling error for article:", art.id, e);
+                // silenzioso in produzione
             }
         }
         if (updatedCount > 0) {
-            displayResults([...currentArticles]);
+            displayResults([...currentArticles], true);
         }
     }, 2500);
 }
